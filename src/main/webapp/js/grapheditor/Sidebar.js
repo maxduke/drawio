@@ -774,8 +774,8 @@ Sidebar.prototype.setCurrentSearchEntryLibrary = function(id, lib)
 Sidebar.prototype.getKeyStyle = function(style)
 {
 	var newStyle = [];
-
-	if (style != null)
+	
+	if (typeof style === 'string')
 	{
 		var tokens = style.split(';');
 
@@ -1768,8 +1768,8 @@ Sidebar.prototype.addGeneralPalette = function(expand)
 	var fns = [
 	 	this.createVertexTemplateEntry('rounded=0;whiteSpace=wrap;html=1;', 120, 60, '', 'Rectangle', null, null, 'rect rectangle box'),
 	 	this.createVertexTemplateEntry('rounded=1;whiteSpace=wrap;html=1;', 120, 60, '', 'Rounded Rectangle', null, null, 'rounded rect rectangle box'),
-	 	this.createVertexTemplateEntry(graph.appendFontSize('text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;',
-			graph.vertexFontSize), 60, 30, 'Text', 'Text', null, null, 'text textbox textarea label'),
+	 	this.createVertexTemplateEntry(graph.appendFontSize(Editor.defaultTextStyle, graph.vertexFontSize),
+			60, 30, 'Text', 'Text', null, null, 'text textbox textarea label'),
 	 	this.createVertexTemplateEntry('text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;', 180, 120,
 			'<h1 style="margin-top: 0px;">Heading</h1><p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ' +
 			'ut labore et dolore magna aliqua.</p>', 'Textbox', null, null, 'text textbox textarea'),

@@ -6370,7 +6370,7 @@ var LinkDialog = function(editorUi, initialValue, btnLabel, fn, showPages, showN
     		if (data.docs[0].mimeType == 'application/mxe' || (data.docs[0].mimeType != null &&
     			data.docs[0].mimeType.substring(0, 23) == 'application/vnd.jgraph.'))
     		{
-				href = 'https://www.draw.io/#G' + data.docs[0].id;
+				href = 'https://app.diagrams.net/#G' + data.docs[0].id;
     		}
     		else if (data.docs[0].mimeType == 'application/vnd.google-apps.folder')
     		{
@@ -11192,8 +11192,7 @@ var LibraryDialog = function(editorUi, name, library, initialImages, file, mode,
 						if (cells.length > 0)
 						{
 							editorUi.sidebar.createThumb(cells, ew, eh, wrapper, null,
-								true, false, null, null, (Editor.isDarkMode()) ?
-								'#2a252f' : '#ffffff');
+								true, false, null, null, graph.shapeBackgroundColor);
 							
 							// Needs inline block on SVG for delete icon to appear on same line
 							wrapper.firstChild.style.display = 'inline-block';

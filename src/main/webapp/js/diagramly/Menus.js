@@ -3548,8 +3548,7 @@
 			if (graph.isEnabled() && !graph.isCellLocked(graph.getDefaultParent()))
 			{
     			graph.startEditingAtCell(insertVertex('Text', 60, 30, graph.appendFontSize(
-					'text;strokeColor=none;align=center;fillColor=none;html=1;verticalAlign=middle;' +
-					'whiteSpace=wrap;rounded=0;', graph.vertexFontSize), (evt != null &&
+					Editor.defaultTextStyle, graph.vertexFontSize), (evt != null &&
 					!mxEvent.isControlDown(evt) && !mxEvent.isMetaDown(evt) &&
 					graph.isMouseInsertPoint()) ? graph.getInsertPoint() : null));
 			}
@@ -3868,7 +3867,7 @@
 							else
 							{
 								window.geOpenWindow(((mxClient.IS_CHROMEAPP) ?
-									'https://www.draw.io/' : 'https://' + location.host + '/') +
+									'https://app.diagrams.net/' : 'https://' + location.host + '/') +
 									window.location.search + '#U' + encodeURIComponent(fileUrl));
 							}
 						}

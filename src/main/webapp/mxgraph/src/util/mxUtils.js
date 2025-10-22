@@ -240,8 +240,10 @@ var mxUtils =
 			{
 				tokens[i] = mxUtils.trim(tokens[i]);
 				var hasQuotes = tokens[i].length > 2 &&
-					tokens[i].charAt(tokens[i].length - 1) == '"' &&
-					tokens[i].charAt(0) == '"';
+					((tokens[i].charAt(tokens[i].length - 1) == '"' &&
+					tokens[i].charAt(0) == '"') ||
+					(tokens[i].charAt(tokens[i].length - 1) == '\'' &&
+					tokens[i].charAt(0) == '\''));
 
 				if (hasQuotes)
 				{
@@ -255,7 +257,7 @@ var mxUtils =
 
 				if (hasQuotes || tokens[i].indexOf(' ') >= 0)
 				{
-					tokens[i] = '"' + tokens[i] + '"';
+					tokens[i] = "'" + tokens[i].replace(/'/g, "\\'") + "'";
 				}
 			}
 
@@ -2181,9 +2183,10 @@ var mxUtils =
 			
 		if (rgb != null)
 		{
-			return 0.213 * rgb.r +
+			return rgb.a > 0.3 &&
+				(0.213 * rgb.r +
 				0.715 * rgb.g +
-				0.072 * rgb.b < 128;
+				0.072 * rgb.b < 128);
 		}
 
 		return false;
@@ -2317,14 +2320,20 @@ var mxUtils =
 	 * Adds the given transparency to the given color and returns the new color
 	 * as an rgba string.
 	 */
-	addAlphaToColor: function(color, alpha)
+	addAlphaToColor: function(color, alpha, replaceExisting)
 	{
 		if (alpha != null && color != null &&
 			color != 'transparent')
 		{
 			var rgb = mxUtils.parseColor(color);
+
+
+			console.log('parsedColor', color, rgb);
+
+
+			rgb.a = (replaceExisting) ? alpha : (rgb.a * alpha);
 			color = 'rgba(' + rgb.r + ',' + rgb.g + ',' +
-				rgb.b + ',' + (rgb.a * alpha) + ')';
+				rgb.b + ',' + rgb.a + ')';
 		}
 
 		return color;
@@ -4231,7 +4240,7 @@ var mxUtils =
 
 				if (color.length > 6)
 				{
-					a = parseInt(color.substr(6, 2), 16) / 255;
+					a = (parseInt(color.substr(6, 2), 16) / 255).toFixed(3);
 				}
 
 				result = {r: r, g: g, b: b, a: a};

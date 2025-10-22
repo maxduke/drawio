@@ -3476,10 +3476,11 @@ TextFormatPanel.prototype.addFont = function(container)
 	extraPanel.appendChild(htmlOpt);
 
 	var state = graph.view.getState(graph.getSelectionCell());
+	var formatted = mxUtils.getValue(ss.style, 'html', 0) == '1';
 	
-	if ((graph.getSelectionCount() > 1 && ss.style['convertToSvg'] == '1') ||
+	if (formatted && ((graph.getSelectionCount() > 1 && ss.style['convertToSvg'] == '1') ||
 		(graph.getSelectionCount() == 1 && state != null && state.text != null &&
-		state.text.node != null && state.text.node.getElementsByTagName('foreignObject').length == 0))
+		state.text.node != null && state.text.node.getElementsByTagName('foreignObject').length == 0)))
 	{
 		wwOpt.style.opacity = '0.5';
 		wwOpt.getElementsByTagName('input')[0].setAttribute('disabled', 'disabled');
@@ -3488,6 +3489,12 @@ TextFormatPanel.prototype.addFont = function(container)
 	var convertToSvg = this.createCellOption(mxResources.get('lblToSvg'), 'convertToSvg', '0');
 	convertToSvg.style.fontWeight = 'bold';
 	extraPanel.appendChild(convertToSvg);
+	
+	if (!formatted)
+	{
+		convertToSvg.style.opacity = '0.5';
+		convertToSvg.getElementsByTagName('input')[0].setAttribute('disabled', 'disabled');
+	}
 
 	if (!ui.isOffline() || mxClient.IS_CHROMEAPP || EditorUi.isElectronApp)
 	{
@@ -4954,8 +4961,10 @@ StyleFormatPanel.prototype.getCustomColors = function()
 		for (var key in ss.customProperties)
 		{
 			var prop = ss.customProperties[key];
-
-			if (prop != null && prop.type == 'color' && prop.primary)
+			
+			if (prop != null && prop.type == 'color' && prop.primary &&
+				(typeof(prop.isVisible) !== 'function' ||
+				prop.isVisible(ss, this)))
 			{
 				result.push({title: prop.dispName,
 					defaultValue: (prop.defVal == null) ?
@@ -5276,6 +5285,22 @@ StyleFormatPanel.prototype.addStroke = function(container)
 		if (ss.style.shape == 'connector' || ss.style.shape == 'flexArrow' || ss.style.shape == 'filledEdge' ||
 			ss.style.shape == 'wire' || ss.style.shape == 'pipe')
 		{
+			// Copies other marker
+			var otherMarker = mxUtils.getValue(ss.style, mxConstants.STYLE_ENDARROW, mxConstants.NONE);
+			var otherFill = mxUtils.getValue(ss.style, 'endFill', '1');
+
+			if (otherMarker != mxConstants.NONE &&
+				(mxUtils.getValue(ss.style, mxConstants.STYLE_STARTARROW, mxConstants.NONE) != otherMarker ||
+				mxUtils.getValue(ss.style, 'startSize', '1') != mxUtils.getValue(ss.style, 'endSize', '1') ||
+				mxUtils.getValue(ss.style, 'startFill', '1') != otherFill))
+			{
+				Format.processMenuIcon(this.editorUi.menus.edgeStyleChange(menu, '',
+					[mxConstants.STYLE_STARTARROW, 'startFill', 'startSize'],
+					[otherMarker, otherFill, mxUtils.getValue(ss.style, 'endSize')], null, null, false,
+						ui.getImageForMarker(otherMarker, otherFill, ss.style.shape, ss.style.shape))).
+							setAttribute('title', mxResources.get('copy'));
+			}
+			
 			Format.processMenuIcon(this.editorUi.menus.edgeStyleChange(menu, '', [mxConstants.STYLE_STARTARROW, 'startFill'],
 				[mxConstants.NONE, 0], null, null, false, Format.noMarkerImage.src)).setAttribute('title', mxResources.get('none'));
 			
@@ -5375,6 +5400,22 @@ StyleFormatPanel.prototype.addStroke = function(container)
 		if (ss.style.shape == 'connector' || ss.style.shape == 'flexArrow' || ss.style.shape == 'filledEdge' ||
 			ss.style.shape == 'wire' || ss.style.shape == 'pipe')
 		{
+			// Copies other marker
+			var otherMarker = mxUtils.getValue(ss.style, mxConstants.STYLE_STARTARROW, mxConstants.NONE);
+			var otherFill = mxUtils.getValue(ss.style, 'startFill', '1');
+
+			if (otherMarker != mxConstants.NONE &&
+				(mxUtils.getValue(ss.style, mxConstants.STYLE_ENDARROW, mxConstants.NONE) != otherMarker ||
+				mxUtils.getValue(ss.style, 'endSize', '1') != mxUtils.getValue(ss.style, 'startSize', '1') ||
+				mxUtils.getValue(ss.style, 'endFill', '1') != otherFill))
+			{
+				Format.processMenuIcon(this.editorUi.menus.edgeStyleChange(menu, '',
+					[mxConstants.STYLE_ENDARROW, 'endFill', 'endSize'],
+					[otherMarker, otherFill, mxUtils.getValue(ss.style, 'startSize')], null, null, false,
+						ui.getImageForMarker(otherMarker, otherFill, ss.style.shape, ss.style.shape)),
+							'scaleX(-1)').setAttribute('title', mxResources.get('copy'));
+			}
+			
 			Format.processMenuIcon(this.editorUi.menus.edgeStyleChange(menu, '', [mxConstants.STYLE_ENDARROW, 'endFill'],
 				[mxConstants.NONE, 0], null, null, false, Format.noMarkerImage.src)).setAttribute('title', mxResources.get('none'));
 			
@@ -6013,8 +6054,10 @@ StyleFormatPanel.prototype.addEffects = function(div)
 			for (var key in ss.customProperties)
 			{
 				var prop = ss.customProperties[key];
-				
-				if (prop != null && prop.type == 'bool' && prop.primary)
+
+				if (prop != null && prop.type == 'bool' && prop.primary &&
+					(typeof(prop.isVisible) !== 'function' ||
+					prop.isVisible(ss, this)))
 				{
 					addOption(prop.dispName, key, prop.defVal ? '1' : '0');
 				}

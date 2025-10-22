@@ -1211,7 +1211,7 @@ EditorUi.prototype.createSelectionState = function()
 
 	this.updateSelectionStateForTableCells(result);
 
-	if (Editor.enableCustomProperties && this.format != null)
+	if (Editor.enableCustomProperties)
 	{
 		result.customProperties = {};
 		var vertices = result.vertices;
@@ -1249,11 +1249,7 @@ EditorUi.prototype.findCommonProperties = function(cell, properties, addAll, sst
 			{
 				for (var i = 0; i < custProperties.length; i++)
 				{
-					if (typeof custProperties[i].isVisible !== 'function' ||
-						custProperties[i].isVisible(sstate, this.format))
-					{
-						properties[custProperties[i].name] = custProperties[i];
-					}
+					properties[custProperties[i].name] = custProperties[i];
 				}
 			}
 			else
@@ -1314,7 +1310,10 @@ EditorUi.prototype.findCommonProperties = function(cell, properties, addAll, sst
 		{
 			handleCustomProp(JSON.parse(userCustomProp));
 		}
-		catch(e){}
+		catch(e)
+		{
+			// ignore
+		}
 	}
 };
 
@@ -2193,15 +2192,8 @@ EditorUi.prototype.getCellsForShapePicker = function(cell, hovering, showEdges)
 	
 	if (cell == null)
 	{
-		cell = createVertex(graph.appendFontSize('text;html=1;align=center;verticalAlign=middle;resizable=0;' +
-			'points=[];autosize=1;strokeColor=none;fillColor=none;', graph.vertexFontSize), 40, 20, 'Text');
-		
-		if (graph.model.isVertex(cell) && graph.isAutoSizeCell(cell))
-		{
-			// Uses offscreen graph to bypass undo history
-			var tempGraph = Graph.createOffscreenGraph(graph.getStylesheet());
-			tempGraph.updateCellSize(cell);
-		}
+		cell = createVertex(graph.appendFontSize(Editor.defaultTextStyle,
+			graph.vertexFontSize), 60, 30, 'Text');
 	}
 
 	var cells = [cell, createVertex('whiteSpace=wrap;html=1;'),
