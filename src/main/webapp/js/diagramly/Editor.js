@@ -282,6 +282,11 @@
 	Editor.enableAnimations = true;
 
 	/**
+	 * Specifies if window docking should be enabled. Default is true.
+	 */
+	Editor.enableWindowDocking = true;
+
+	/**
 	 * Specifies paste should be at the mouse pointer location. Default is true.
 	 */
 	Editor.pasteAtMousePointer = true;
@@ -297,10 +302,22 @@
 	Editor.showLinkIcons = false;
 
 	/**
+	 * Specifies if tooltip icons should be shown on shapes. Default is false.
+	 */
+	Editor.showTooltipIcons = false;
+
+	/**
 	 * Specifies the default text style.
 	 */
 	Editor.defaultTextStyle = 'text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;' +
 		'align=center;verticalAlign=middle;rounded=0;';
+	
+	/**
+	 * Specifies the default style for sticky notes.
+	 */
+	Editor.defaultNoteStyle = 'shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;' +
+		'fontColor=#000000;darkOpacity=0.05;fillColor=#FFF9B2;strokeColor=none;fillStyle=solid;' +
+		'direction=west;gradientDirection=north;gradientColor=#FFF2A1;shadow=1;size=20;autosizeText=1;'
 	
 	/**
 	 * Specifies if ChatGPT should be enabled. Default is true only
@@ -2545,6 +2562,16 @@
 				Editor.showLinkIcons = config.showLinkIcons;
 			}
 
+			if (config.showTooltipIcons != null)
+			{
+				Editor.showTooltipIcons = config.showTooltipIcons;
+			}
+
+			if (config.enableInlineToolbar != null)
+			{
+				Editor.enableInlineToolbar = config.enableInlineToolbar;
+			}
+			
 			if (config.oneDriveInlinePicker != null)
 			{
 				Editor.oneDriveInlinePicker = config.oneDriveInlinePicker;
@@ -2913,6 +2940,11 @@
 			if (config.enableAnimations != null)
 			{
 				Editor.enableAnimations = config.enableAnimations;
+			}
+
+			if (config.enableWindowDocking != null)
+			{
+				Editor.enableWindowDocking = config.enableWindowDocking;
 			}
 
 			if (config.enableAi != null)
@@ -4828,10 +4860,15 @@
 	// Overrides ID for pages
 	if (typeof window.EditDataDialog !== 'undefined')
 	{
-		EditDataDialog.getDisplayIdForCell = function(ui, cell)
+		EditDataDialog.getDisplayIdForCell = function(ui, cell, optionalGraph)
 		{
 			var id = null;
-			
+
+			if (optionalGraph != null)
+			{
+				return null;
+			}
+
 			if (ui.editor.graph.getModel().getParent(cell) != null)
 			{
 				id = cell.getId();
@@ -4840,7 +4877,7 @@
 			{
 				id = ui.currentPage.getId();
 			}
-			
+
 			return id;
 		};
 	}
@@ -5178,6 +5215,10 @@
 
 		mxCellRenderer.defaultShapes['link'].prototype.customProperties = [
 	        {name: 'width', dispName: 'Width', type: 'float', min:0, defVal: 4}
+		];
+
+		mxCellRenderer.defaultShapes['zigzag'].prototype.customProperties = [
+	        {name: 'size', dispName: 'Size', type: 'float', min:5, defVal: 20}
 		];
 
 		mxCellRenderer.defaultShapes['flexArrow'].prototype.customProperties = [

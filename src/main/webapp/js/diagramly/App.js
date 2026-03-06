@@ -181,6 +181,11 @@ App.MODE_DROPBOX = 'dropbox';
 App.MODE_ONEDRIVE = 'onedrive';
 
 /**
+ * M365 Mode
+ */
+App.MODE_M365 = 'm365';
+
+/**
  * Github Mode
  */
 App.MODE_GITHUB = 'github';
@@ -1602,6 +1607,30 @@ App.prototype.init = function()
 		});
 
 		initOneDriveClient();
+	}
+
+	if (urlParams['ms365'] != '0')
+	{
+		try
+		{
+			this.m365 = new OneDriveClient(this, false, false, false, true);
+
+			this.m365.addListener('userChanged', mxUtils.bind(this, function()
+			{
+				this.updateButtonContainer();
+				this.restoreLibraries();
+			}));
+
+			// Notifies listeners of new client
+			this.fireEvent(new mxEventObject('clientLoaded', 'client', this.m365));
+		}
+		catch (e)
+		{
+			if (window.console != null)
+			{
+				console.log('M365Client disabled: ' + e.message);
+			}
+		}
 	}
 
 	/**
@@ -4874,7 +4903,7 @@ App.prototype.saveFile = function(forceDialog, success)
 							window.openFile.setData(this.getFileData(true));
 							this.openLink(this.getUrl(window.location.pathname), null, true);
 						}
-						else if (prev != mode)
+						else if (forceDialog || prev != mode) // create a new file also with saveAs even if mode is the same as current
 						{
 							var createFile = mxUtils.bind(this, function(folderId)
 							{
@@ -5044,6 +5073,9 @@ App.prototype.getModeForChar = function(char)
 	{
 		return App.MODE_ONEDRIVE;
 	}
+	else if (char == 'M') {
+		return App.MODE_M365;
+	}
 	else if (char == 'H')
 	{
 		return App.MODE_GITHUB;
@@ -5111,6 +5143,10 @@ App.prototype.isModeEnabled = function(mode)
 		return typeof window.TrelloClient === 'function' && urlParams['tr'] == '1' &&
 			mxClient.IS_SVG && (document.documentMode == null ||
 				document.documentMode > 9);
+	}
+	else if (mode == App.MODE_M365)
+	{
+		return this.m365 != null;
 	}
 	else
 	{
@@ -5249,6 +5285,10 @@ App.prototype.createFile = function(title, data, libs, mode, done, replace, fold
 			else if (mode == App.MODE_ONEDRIVE && this.oneDrive != null)
 			{
 				this.oneDrive.insertFile(title, data, fileCreated, error, false, folderId);
+			}
+			else if (mode == App.MODE_M365 && this.m365 != null)
+			{
+				this.m365.insertFile(title, data, fileCreated, error, false, folderId);
 			}
 			else if (mode == App.MODE_BROWSER)
 			{
@@ -6853,6 +6893,10 @@ App.prototype.getServiceForName = function(name)
 	{
 		return this.oneDrive;
 	}
+	else if (name == App.MODE_M365)
+	{
+		return this.m365;
+	}
 	else if (name == App.MODE_DROPBOX)
 	{
 		return this.dropbox;
@@ -6887,6 +6931,10 @@ App.prototype.getTitleForService = function(name)
 	else if (name == App.MODE_ONEDRIVE)
 	{
 		return mxResources.get('oneDrive');
+	}
+	else if (name == App.MODE_M365)
+	{
+		return mxResources.get('m365');
 	}
 	else
 	{
@@ -6937,6 +6985,20 @@ App.prototype.pickFolder = function(mode, fn, enabled, direct, force, returnPick
 			{
 				folderId = OneDriveFile.prototype.getIdOf(files.value[0]);
         		fn((returnPickerValue) ? files : folderId);
+			}
+		}), direct);
+	}
+	else if (enabled && mode == App.MODE_M365 && this.m365 != null)
+	{
+		this.m365.pickFolder(mxUtils.bind(this, function (files)
+		{
+			var folderId = null;
+			resume();
+
+			if (files != null && files.value != null && files.value.length > 0)
+			{
+				folderId = OneDriveFile.prototype.getIdOf(files.value[0]);
+				fn((returnPickerValue) ? files : folderId);
 			}
 		}), direct);
 	}

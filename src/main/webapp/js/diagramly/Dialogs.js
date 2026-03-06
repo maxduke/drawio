@@ -207,32 +207,32 @@ var StorageDialog = function(editorUi, fn, rowLimit)
 		{
 			addLogo(IMAGE_PATH + '/google-drive-logo.svg', mxResources.get('googleDrive'), App.MODE_GOOGLE, 'drive');
 		}
-	
-		if (typeof window.OneDriveClient === 'function')
+
+		if (editorUi.m365 != null)
 		{
-			addLogo(IMAGE_PATH + '/onedrive-logo.svg', mxResources.get('oneDrive'), App.MODE_ONEDRIVE, 'oneDrive');
+			addLogo(IMAGE_PATH + '/onedrive-logo.svg', mxResources.get('m365'), App.MODE_M365, 'm365');
 		}
-	
+
 		if (urlParams['noDevice'] != '1')
 		{
-			addLogo(IMAGE_PATH + '/osa_drive-harddisk.png', mxResources.get('device'), App.MODE_DEVICE);			
+			addLogo(IMAGE_PATH + '/osa_drive-harddisk.png', mxResources.get('device'), App.MODE_DEVICE);
 		}
-		
+
 		if (isLocalStorage && (urlParams['browser'] == '1' || urlParams['offline'] == '1'))
 		{
 			addLogo(IMAGE_PATH + '/osa_database.png', mxResources.get('browser'), App.MODE_BROWSER);
 		}
-		
-		if (typeof window.DropboxClient === 'function')
+
+		if (typeof window.OneDriveClient === 'function')
 		{
-			addLogo(IMAGE_PATH + '/dropbox-logo.svg', mxResources.get('dropbox'), App.MODE_DROPBOX, 'dropbox');
+			addLogo(IMAGE_PATH + '/onedrive-logo.svg', mxResources.get('oneDrive'), App.MODE_ONEDRIVE, 'oneDrive');
 		}
 
 		if (editorUi.gitHub != null)
 		{
 			addLogo(IMAGE_PATH + '/github-logo.svg', mxResources.get('github'), App.MODE_GITHUB, 'gitHub');
 		}
-		
+
 		if (editorUi.gitLab != null)
 		{
 			addLogo(IMAGE_PATH + '/gitlab-logo.svg', mxResources.get('gitlab'), App.MODE_GITLAB, 'gitLab');
@@ -334,6 +334,11 @@ var SplashDialog = function(editorUi)
 	{
 		logo.src = IMAGE_PATH + '/onedrive-logo.svg';
 		service = mxResources.get('oneDrive');
+	}
+	else if (editorUi.mode == App.MODE_M365)
+	{
+		logo.src = IMAGE_PATH + '/onedrive-logo.svg';
+		service = mxResources.get('m365');
 	}
 	else if (editorUi.mode == App.MODE_GITHUB)
 	{
@@ -648,31 +653,36 @@ var EmbedDialog = function(editorUi, result, timeout, ignoreSize, previewFn, tit
 {
 	tweet = (tweet != null) ? tweet : 'Check out the diagram I made using @drawio';
 	var div = document.createElement('div');
+	div.style.height = '100%';
+	div.style.display = 'flex';
+	div.style.flexDirection = 'column';
 	var maxSize = 500000;
 
 	// Checks if result is a link
 	var validUrl = /^https?:\/\//.test(result) || /^mailto:\/\//.test(result);
 
+	var header = document.createElement('div');
+	header.style.flexShrink = '0';
+	header.style.position = 'relative';
+
 	if (title != null)
 	{
-		mxUtils.write(div, title);
+		mxUtils.write(header, title);
 	}
 	else
 	{
-		mxUtils.write(div, mxResources.get((result.length < maxSize) ?
+		mxUtils.write(header, mxResources.get((result.length < maxSize) ?
 			((validUrl) ? 'link' : 'mainEmbedNotice') : 'preview') + ':');
 	}
-	mxUtils.br(div);
-	
-	var size = document.createElement('div');
-	size.style.position = 'absolute';
-	size.style.top = '30px';
-	size.style.right = '30px';
+
+	var size = document.createElement('span');
+	size.style.cssFloat = 'right';
 	size.style.color = 'gray';
 	mxUtils.write(size, editorUi.formatFileSize(result.length));
+	header.appendChild(size);
 
-	div.appendChild(size);
-	
+	div.appendChild(header);
+
 	// Using DIV for faster rendering
 	var text = document.createElement('textarea');
 	text.setAttribute('autocomplete', 'off');
@@ -683,12 +693,11 @@ var EmbedDialog = function(editorUi, result, timeout, ignoreSize, previewFn, tit
 	text.style.wordBreak = 'break-all';
 	text.style.marginTop = '10px';
 	text.style.resize = 'none';
-	text.style.height = '180px';
-	text.style.width = '440px';
-	text.style.border = '1px solid gray';
+	text.style.flex = '1';
+	text.style.width = '100%';
+	text.style.boxSizing = 'border-box';
 	text.value = mxResources.get('updatingDocument');
 	div.appendChild(text);
-	mxUtils.br(div);
 
 	this.init = function()
 	{
@@ -717,9 +726,10 @@ var EmbedDialog = function(editorUi, result, timeout, ignoreSize, previewFn, tit
 	};
 	
 	var buttons = document.createElement('div');
-	buttons.style.position = 'absolute';
-	buttons.style.bottom = '36px';
-	buttons.style.right = '32px';
+	buttons.style.flexShrink = '0';
+	buttons.style.textAlign = 'right';
+	buttons.style.paddingTop = '14px';
+	buttons.style.whiteSpace = 'nowrap';
 	
 	var previewBtn = null;
 	
@@ -2468,6 +2478,10 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 		logo.src = IMAGE_PATH + '/dropbox-logo.svg';
 	}
 	else if (editorUi.mode == App.MODE_ONEDRIVE)
+	{
+		logo.src = IMAGE_PATH + '/onedrive-logo.svg';
+	}
+	else if (editorUi.mode == App.MODE_M365)
 	{
 		logo.src = IMAGE_PATH + '/onedrive-logo.svg';
 	}
@@ -4478,6 +4492,12 @@ var SaveDialog = function(editorUi, title, saveFn, disabledModes, data, mimeType
 				entry = {mode: mode, path: result.value[0].name,
 					id: OneDriveFile.prototype.getIdOf(result.value[0])};
 			}
+			else if (mode == App.MODE_M365 && result.value != null && result.value.length > 0) {
+				entry = {
+					mode: mode, path: result.value[0].name,
+					id: OneDriveFile.prototype.getIdOf(result.value[0])
+				};
+			}
 			else if ((mode == App.MODE_GITHUB || mode == App.MODE_GITLAB) &&
 				result != null && result.length > 0)
 			{
@@ -4565,7 +4585,12 @@ var SaveDialog = function(editorUi, title, saveFn, disabledModes, data, mimeType
 				null, null, 'root');
 			addStorageEntry(App.MODE_ONEDRIVE, null, null, null, null, 'pick');
 		}
-		
+
+		if (editorUi.m365 != null)
+		{
+			addStorageEntry(App.MODE_M365, null, null, null, null, 'pick');
+		}
+
 		if (editorUi.dropbox != null)
 		{
 			addStorageEntry(App.MODE_DROPBOX, 'Apps' + editorUi.dropbox.appPath);
@@ -4573,6 +4598,7 @@ var SaveDialog = function(editorUi, title, saveFn, disabledModes, data, mimeType
 
 		addStorageEntry(App.MODE_GITHUB, null, null, null, null, 'pick');
 		addStorageEntry(App.MODE_GITLAB, null, null, null, null, 'pick');
+
 		addStorageEntry(App.MODE_TRELLO);
 
 		var allowDevice = !Editor.useLocalStorage || urlParams['storage'] == 'device' ||
@@ -5005,6 +5031,21 @@ var CreateDialog = function(editorUi, title, createFn, cancelFn, dlgTitle, btnLa
 			}
 			
 			addLogo(IMAGE_PATH + '/onedrive-logo.svg', mxResources.get('oneDrive'), App.MODE_ONEDRIVE, 'oneDrive');
+		}
+
+		if (editorUi.m365 != null)
+		{
+			var m365Option = document.createElement('option');
+			m365Option.setAttribute('value', App.MODE_M365);
+			mxUtils.write(m365Option, mxResources.get('m365'));
+			serviceSelect.appendChild(m365Option);
+
+			if (editorUi.mode == App.MODE_M365)
+			{
+				m365Option.setAttribute('selected', 'selected');
+			}
+
+			addLogo(IMAGE_PATH + '/onedrive-logo.svg', mxResources.get('m365'), App.MODE_M365, 'm365');
 		}
 
 		if (typeof window.DropboxClient === 'function')
@@ -9576,6 +9617,11 @@ var AuthDialog = function(editorUi, peer, showRememberOption, fn)
 		service = mxResources.get('trello');
 		img.src = IMAGE_PATH + '/trello-logo-white.svg';
 	}
+	else if (peer == editorUi.m365)
+	{
+		service = mxResources.get('m365');
+		img.src = IMAGE_PATH + '/onedrive-logo-white.svg';
+	}
 	
 	var p = document.createElement('p');
 	mxUtils.write(p, mxResources.get('authorizeThisAppIn', [service]));
@@ -11794,7 +11840,8 @@ var LibraryDialog = function(editorUi, name, library, initialImages, file, mode,
 					var dlg = new EmbedDialog(editorUi, window.location.protocol + '//' +
 						window.location.host + '/' + search, null, null, null, null,
 						'Check out the library I made using @drawio');
-					editorUi.showDialog(dlg.container, 450, 240, true);
+					editorUi.showDialog(dlg.container, 450, 270, true, true, null,
+						false, null, new mxRectangle(0, 0, 400, 250));
 					dlg.init();
 				}
 				else if (file.constructor == DriveLibrary)
@@ -12933,7 +12980,7 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 	var table = document.createElement('table');
 	var tbody = document.createElement('tbody');
 	table.style.width = '100%';
-	table.style.marginTop = '8px';
+	table.style.height = '100%';
 	table.style.tableLayout = 'fixed';
 	
 	var file = editorUi.getCurrentFile();
@@ -13047,7 +13094,7 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 	
 		var zoomInput = document.createElement('input');
 		zoomInput.setAttribute('value', (scale * 100) + '%');
-		zoomInput.style.marginLeft = '4px';
+		zoomInput.style.boxSizing = 'border-box';
 		zoomInput.style.width = '100%';
 		
 		td = document.createElement('td');
@@ -13066,7 +13113,7 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 	
 		var borderInput = document.createElement('input');
 		borderInput.setAttribute('value', border);
-		borderInput.style.marginLeft = '4px';
+		borderInput.style.boxSizing = 'border-box';
 		borderInput.style.width = '100%';
 		
 		td = document.createElement('td');
@@ -13208,8 +13255,14 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 
 		td = document.createElement('td');
 		td.style.whiteSpace = 'nowrap';
-		td.appendChild(collabInput);
-		td.appendChild(editorUi.menus.createHelpLink('https://github.com/jgraph/drawio/discussions/2672'));
+		
+		var div = document.createElement('div');
+		div.style.display = 'flex';
+		div.style.alignItems = 'center';
+		div.style.justifyContent = 'start';
+		div.appendChild(collabInput);
+		div.appendChild(editorUi.menus.createHelpLink('https://github.com/jgraph/drawio/discussions/2672'));
+		td.appendChild(div);
 		row.appendChild(td);
 		tbody.appendChild(row);
 	}
@@ -13232,7 +13285,7 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 		sizeInput.setAttribute('title', temp);
 		sizeInput.setAttribute('value', temp);
 		sizeInput.setAttribute('disabled', 'disabled');
-		sizeInput.style.marginLeft = '4px';
+		sizeInput.style.boxSizing = 'border-box';
 		sizeInput.style.width = '100%';
 
 		td = document.createElement('td');
@@ -13260,7 +13313,7 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 		a.style.overflow = 'hidden';
 		a.style.textOverflow = 'ellipsis';
 		a.style.display = 'block';
-		a.style.margin = '2px 0px 2px 8px';
+		a.style.margin = '2px';
 		a.style.fontSize = '10pt';
 		mxUtils.write(a, publicLink);
 
@@ -13292,7 +13345,7 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 		pathInput.setAttribute('title', file.fileObject.path);
 		pathInput.setAttribute('value', file.fileObject.path);
 		pathInput.setAttribute('disabled', 'disabled');
-		pathInput.style.marginLeft = '4px';
+		pathInput.style.boxSizing = 'border-box';
 		pathInput.style.width = '100%';
 
 		td = document.createElement('td');
@@ -13336,6 +13389,101 @@ var FilePropertiesDialog = function(editorUi, publicLink)
 	if (editorUi.editor.cancelFirst)
 	{
 		td.appendChild(cancelBtn);
+	}
+
+
+	if (editorUi.fileNode != null)
+	{
+		var varsBtn = mxUtils.button(mxResources.get('editData') + '...', function()
+		{
+			editorUi.hideDialog();
+
+			// Parse current vars from fileNode
+			var vars = {};
+
+			try
+			{
+				var varsStr = editorUi.fileNode.getAttribute('vars');
+
+				if (varsStr != null && varsStr.length > 0)
+				{
+					vars = JSON.parse(varsStr);
+				}
+			}
+			catch (e) {}
+
+			// Create temp XML node with vars as attributes
+			var doc = mxUtils.createXmlDocument();
+			var obj = doc.createElement('object');
+			obj.setAttribute('label', '');
+
+			for (var key in vars)
+			{
+				obj.setAttribute(key, vars[key]);
+			}
+
+			// Use a temporary graph so EditDataDialog operates on
+			// its own model instead of overriding setValue on the
+			// real graph model.
+			var tempGraph = editorUi.createTemporaryGraph(
+				editorUi.editor.graph.getStylesheet());
+			var tempCell = new mxCell(obj);
+			tempGraph.getModel().add(tempGraph.getDefaultParent(), tempCell);
+
+			tempGraph.getModel().addListener(mxEvent.CHANGE, function(sender, evt)
+			{
+				var changes = evt.getProperty('edit').changes;
+
+				for (var i = 0; i < changes.length; i++)
+				{
+					if (changes[i] instanceof mxValueChange &&
+						changes[i].cell === tempCell)
+					{
+						var value = changes[i].value;
+						var newVars = {};
+						var attrs = value.attributes;
+
+						for (var j = 0; j < attrs.length; j++)
+						{
+							if (attrs[j].nodeName != 'label')
+							{
+								newVars[attrs[j].nodeName] = attrs[j].nodeValue;
+							}
+						}
+
+						var json = JSON.stringify(newVars);
+
+						if (json == '{}')
+						{
+							editorUi.fileNode.removeAttribute('vars');
+						}
+						else
+						{
+							editorUi.fileNode.setAttribute('vars', json);
+						}
+
+						editorUi.updateFileVars();
+						editorUi.editor.graph.refresh();
+
+						var currentFile = editorUi.getCurrentFile();
+
+						if (currentFile != null)
+						{
+							currentFile.fileChanged();
+						}
+					}
+				}
+			});
+
+			// Open EditDataDialog with temp graph
+			var dlg = new EditDataDialog(editorUi, tempCell, tempGraph);
+			editorUi.showDialog(dlg.container, 480, 420, true, false, null,
+				false, null, new mxRectangle(0, 0, 440, 220));
+			dlg.init();
+		});
+
+		varsBtn.className = 'geBtn';
+		td.appendChild(varsBtn);
 	}
 
 	td.appendChild(genericBtn);
@@ -13872,6 +14020,1502 @@ var ConnectionPointsDialog = function(editorUi, cell)
 	};
 
 	this.destroy = destroy;
+
+	this.container = div;
+};
+
+/**
+ * Constructs a new polygon editing dialog for mxgraph.basic.polygon shapes.
+ */
+var PolygonDialog = function(editorUi, cell)
+{
+	var graph = editorUi.editor.graph;
+	var CANVAS_SIZE = 400;
+	var VERTEX_RADIUS = 5;
+	var SNAP_SIZE = 20;
+
+	var points = [];
+	var selectedIndex = -1;
+	var closePath = true;
+	var snapToGrid = true;
+	var undoStack = [];
+	var redoStack = [];
+	var dragIndex = -1;
+	var dragType = null;
+	var isDragging = false;
+	var dragStarted = false;
+
+	var viewX = 0, viewY = 0;
+	var viewW = CANVAS_SIZE, viewH = CANVAS_SIZE;
+	var zoom = 1;
+	var isPanning = false;
+	var panStartX = 0, panStartY = 0;
+	var panStartViewX = 0, panStartViewY = 0;
+	var spacePressed = false;
+	var MIN_ZOOM = 0.05;
+	var MAX_ZOOM = 5;
+
+	var listDragSource = null;
+
+	// Load current polygon data from cell style
+	var state = graph.view.getState(cell);
+
+	if (state != null)
+	{
+		try
+		{
+			var coords = JSON.parse(mxUtils.getValue(state.style, 'polyCoords', '[]'));
+			var curves = JSON.parse(mxUtils.getValue(state.style, 'polyCurves', '[]'));
+			var polyline = mxUtils.getValue(state.style, 'polyline', 0);
+			closePath = !(polyline == 1 || polyline === true ||
+				polyline === 'true' || polyline === '1');
+
+			for (var i = 0; i < coords.length; i++)
+			{
+				var pt = {x: Math.round(coords[i][0] * CANVAS_SIZE),
+					y: Math.round(coords[i][1] * CANVAS_SIZE), type: 'L'};
+
+				if (i > 0 && curves.length > i - 1 && curves[i - 1] != null &&
+					curves[i - 1].length >= 3 && curves[i - 1][0] === 'Q')
+				{
+					pt.type = 'Q';
+					pt.cx = Math.round(curves[i - 1][1] * CANVAS_SIZE);
+					pt.cy = Math.round(curves[i - 1][2] * CANVAS_SIZE);
+				}
+
+				points.push(pt);
+			}
+
+			// Check closing segment curve
+			if (closePath && coords.length > 2 && curves.length >= coords.length &&
+				curves[coords.length - 1] != null && curves[coords.length - 1].length >= 3 &&
+				curves[coords.length - 1][0] === 'Q')
+			{
+				points[0].type = 'Q';
+				points[0].cx = Math.round(curves[coords.length - 1][1] * CANVAS_SIZE);
+				points[0].cy = Math.round(curves[coords.length - 1][2] * CANVAS_SIZE);
+			}
+		}
+		catch (e)
+		{
+			// ignore
+		}
+	}
+
+	var div = document.createElement('div');
+	div.style.userSelect = 'none';
+	div.setAttribute('tabindex', '0');
+	div.style.outline = 'none';
+	div.style.position = 'absolute';
+	div.style.left = '30px';
+	div.style.right = '30px';
+	div.style.top = '30px';
+	div.style.bottom = '30px';
+
+	// Main content area - flex layout
+	var contentDiv = document.createElement('div');
+	contentDiv.style.display = 'flex';
+	contentDiv.style.gap = '10px';
+	contentDiv.style.position = 'absolute';
+	contentDiv.style.left = '0px';
+	contentDiv.style.right = '0px';
+	contentDiv.style.top = '0px';
+	contentDiv.style.bottom = '40px';
+	div.appendChild(contentDiv);
+
+	// Left: SVG canvas
+	var svgContainer = document.createElement('div');
+	svgContainer.style.border = '1px solid';
+	svgContainer.style.borderColor = 'inherit';
+	svgContainer.style.borderRadius = '4px';
+	svgContainer.style.flexGrow = '1';
+	svgContainer.style.flexShrink = '1';
+	svgContainer.style.minWidth = '200px';
+	svgContainer.style.position = 'relative';
+	svgContainer.style.overflow = 'hidden';
+	contentDiv.appendChild(svgContainer);
+
+	var svgNS = 'http://www.w3.org/2000/svg';
+	var svg = document.createElementNS(svgNS, 'svg');
+	svg.setAttribute('width', '100%');
+	svg.setAttribute('height', '100%');
+	svg.setAttribute('viewBox', '0 0 ' + CANVAS_SIZE + ' ' + CANVAS_SIZE);
+	svg.style.display = 'block';
+	svg.style.cursor = 'crosshair';
+
+	// Grid pattern
+	var defs = document.createElementNS(svgNS, 'defs');
+	var pattern = document.createElementNS(svgNS, 'pattern');
+	var gridPatternId = 'polygonGrid_' + Date.now();
+	pattern.setAttribute('id', gridPatternId);
+	pattern.setAttribute('width', SNAP_SIZE);
+	pattern.setAttribute('height', SNAP_SIZE);
+	pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+
+	var gridPath = document.createElementNS(svgNS, 'path');
+	gridPath.setAttribute('d', 'M ' + SNAP_SIZE + ' 0 L 0 0 0 ' + SNAP_SIZE);
+	gridPath.setAttribute('fill', 'none');
+	gridPath.setAttribute('stroke', '#e0e0e0');
+	gridPath.setAttribute('stroke-width', '0.5');
+	pattern.appendChild(gridPath);
+	defs.appendChild(pattern);
+	svg.appendChild(defs);
+
+	var gridRect = document.createElementNS(svgNS, 'rect');
+	gridRect.setAttribute('x', '-5000');
+	gridRect.setAttribute('y', '-5000');
+	gridRect.setAttribute('width', '10000');
+	gridRect.setAttribute('height', '10000');
+	gridRect.setAttribute('fill', 'url(#' + gridPatternId + ')');
+	svg.appendChild(gridRect);
+
+	// Polygon path element
+	var polyPath = document.createElementNS(svgNS, 'path');
+	polyPath.setAttribute('fill', 'rgba(66, 133, 244, 0.1)');
+	polyPath.setAttribute('stroke', '#4285f4');
+	polyPath.setAttribute('stroke-width', '2');
+	svg.appendChild(polyPath);
+
+	// Group for control point guide lines
+	var controlGuideGroup = document.createElementNS(svgNS, 'g');
+	svg.appendChild(controlGuideGroup);
+
+	// Group for vertex circles
+	var vertexGroup = document.createElementNS(svgNS, 'g');
+	svg.appendChild(vertexGroup);
+
+	// Group for control point handles
+	var controlPointGroup = document.createElementNS(svgNS, 'g');
+	svg.appendChild(controlPointGroup);
+
+	svgContainer.appendChild(svg);
+
+	// Scrollbar constants
+	var SCROLLBAR_SIZE = 12;
+	var SCROLL_MIN = -CANVAS_SIZE;
+	var SCROLL_MAX = 2 * CANVAS_SIZE;
+	var SCROLL_RANGE = SCROLL_MAX - SCROLL_MIN;
+
+	// Horizontal scrollbar
+	var hScrollbar = document.createElement('div');
+	hScrollbar.style.position = 'absolute';
+	hScrollbar.style.bottom = '0px';
+	hScrollbar.style.left = '0px';
+	hScrollbar.style.right = SCROLLBAR_SIZE + 'px';
+	hScrollbar.style.height = SCROLLBAR_SIZE + 'px';
+	hScrollbar.style.backgroundColor = 'rgba(128,128,128,0.08)';
+
+	var hThumb = document.createElement('div');
+	hThumb.style.position = 'absolute';
+	hThumb.style.top = '2px';
+	hThumb.style.height = (SCROLLBAR_SIZE - 4) + 'px';
+	hThumb.style.borderRadius = '4px';
+	hThumb.style.backgroundColor = 'rgba(128,128,128,0.35)';
+	hThumb.style.cursor = 'pointer';
+	hThumb.style.minWidth = '20px';
+	hScrollbar.appendChild(hThumb);
+	svgContainer.appendChild(hScrollbar);
+
+	// Vertical scrollbar
+	var vScrollbar = document.createElement('div');
+	vScrollbar.style.position = 'absolute';
+	vScrollbar.style.top = '0px';
+	vScrollbar.style.right = '0px';
+	vScrollbar.style.bottom = SCROLLBAR_SIZE + 'px';
+	vScrollbar.style.width = SCROLLBAR_SIZE + 'px';
+	vScrollbar.style.backgroundColor = 'rgba(128,128,128,0.08)';
+
+	var vThumb = document.createElement('div');
+	vThumb.style.position = 'absolute';
+	vThumb.style.left = '2px';
+	vThumb.style.width = (SCROLLBAR_SIZE - 4) + 'px';
+	vThumb.style.borderRadius = '4px';
+	vThumb.style.backgroundColor = 'rgba(128,128,128,0.35)';
+	vThumb.style.cursor = 'pointer';
+	vThumb.style.minHeight = '20px';
+	vScrollbar.appendChild(vThumb);
+	svgContainer.appendChild(vScrollbar);
+
+	function zoomTo(newZoom)
+	{
+		var rect = svg.getBoundingClientRect();
+
+		if (rect.width > 0 && rect.height > 0)
+		{
+			var cx = viewX + viewW / 2;
+			var cy = viewY + viewH / 2;
+			zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+			viewW = rect.width * zoom;
+			viewH = rect.height * zoom;
+			viewX = cx - viewW / 2;
+			viewY = cy - viewH / 2;
+			updateViewBox();
+		}
+	};
+
+	// Scrollbar state
+	var hScrollDragging = false;
+	var vScrollDragging = false;
+	var scrollDragStart = 0;
+	var scrollDragStartView = 0;
+
+	function updateScrollbars()
+	{
+		var containerRect = svgContainer.getBoundingClientRect();
+
+		if (containerRect.width <= 0 || containerRect.height <= 0)
+		{
+			return;
+		}
+
+		// Horizontal
+		var trackW = containerRect.width - SCROLLBAR_SIZE;
+		var thumbRatio = Math.min(1, viewW / SCROLL_RANGE);
+		var thumbW = Math.max(20, trackW * thumbRatio);
+		var maxScroll = SCROLL_RANGE - viewW;
+		var scrollFrac = maxScroll > 0 ? (viewX - SCROLL_MIN) / maxScroll : 0.5;
+		scrollFrac = Math.max(0, Math.min(1, scrollFrac));
+		hThumb.style.width = thumbW + 'px';
+		hThumb.style.left = (scrollFrac * (trackW - thumbW)) + 'px';
+
+		// Vertical
+		var trackH = containerRect.height - SCROLLBAR_SIZE;
+		var thumbRatioV = Math.min(1, viewH / SCROLL_RANGE);
+		var thumbH = Math.max(20, trackH * thumbRatioV);
+		var maxScrollV = SCROLL_RANGE - viewH;
+		var scrollFracV = maxScrollV > 0 ? (viewY - SCROLL_MIN) / maxScrollV : 0.5;
+		scrollFracV = Math.max(0, Math.min(1, scrollFracV));
+		vThumb.style.height = thumbH + 'px';
+		vThumb.style.top = (scrollFracV * (trackH - thumbH)) + 'px';
+	};
+
+	// Scrollbar thumb drag handlers
+	mxEvent.addListener(hThumb, 'mousedown', function(evt)
+	{
+		hScrollDragging = true;
+		scrollDragStart = evt.clientX;
+		scrollDragStartView = viewX;
+		evt.preventDefault();
+		evt.stopPropagation();
+	});
+
+	mxEvent.addListener(vThumb, 'mousedown', function(evt)
+	{
+		vScrollDragging = true;
+		scrollDragStart = evt.clientY;
+		scrollDragStartView = viewY;
+		evt.preventDefault();
+		evt.stopPropagation();
+	});
+
+	// Scrollbar track click handlers
+	mxEvent.addListener(hScrollbar, 'mousedown', function(evt)
+	{
+		if (evt.target === hScrollbar)
+		{
+			var trackW = hScrollbar.getBoundingClientRect().width;
+			var clickX = evt.clientX - hScrollbar.getBoundingClientRect().left;
+			var maxScroll = SCROLL_RANGE - viewW;
+
+			if (maxScroll > 0)
+			{
+				viewX = SCROLL_MIN + (clickX / trackW) * maxScroll;
+				updateViewBox();
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
+	});
+
+	mxEvent.addListener(vScrollbar, 'mousedown', function(evt)
+	{
+		if (evt.target === vScrollbar)
+		{
+			var trackH = vScrollbar.getBoundingClientRect().height;
+			var clickY = evt.clientY - vScrollbar.getBoundingClientRect().top;
+			var maxScroll = SCROLL_RANGE - viewH;
+
+			if (maxScroll > 0)
+			{
+				viewY = SCROLL_MIN + (clickY / trackH) * maxScroll;
+				updateViewBox();
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
+	});
+
+	var scrollMoveHandler = function(evt)
+	{
+		if (hScrollDragging)
+		{
+			var trackW = svgContainer.getBoundingClientRect().width - SCROLLBAR_SIZE;
+			var thumbW = parseFloat(hThumb.style.width) || 20;
+			var maxScroll = SCROLL_RANGE - viewW;
+
+			if (trackW > thumbW && maxScroll > 0)
+			{
+				var dx = evt.clientX - scrollDragStart;
+				viewX = scrollDragStartView + (dx / (trackW - thumbW)) * maxScroll;
+				updateViewBox();
+			}
+
+			evt.preventDefault();
+		}
+
+		if (vScrollDragging)
+		{
+			var trackH = svgContainer.getBoundingClientRect().height - SCROLLBAR_SIZE;
+			var thumbH = parseFloat(vThumb.style.height) || 20;
+			var maxScroll = SCROLL_RANGE - viewH;
+
+			if (trackH > thumbH && maxScroll > 0)
+			{
+				var dy = evt.clientY - scrollDragStart;
+				viewY = scrollDragStartView + (dy / (trackH - thumbH)) * maxScroll;
+				updateViewBox();
+			}
+
+			evt.preventDefault();
+		}
+	};
+
+	var scrollUpHandler = function(evt)
+	{
+		hScrollDragging = false;
+		vScrollDragging = false;
+	};
+
+	mxEvent.addListener(document, 'mousemove', scrollMoveHandler);
+	mxEvent.addListener(document, 'mouseup', scrollUpHandler);
+
+	function updateViewBox()
+	{
+		svg.setAttribute('viewBox', viewX + ' ' + viewY + ' ' + viewW + ' ' + viewH);
+		updateScrollbars();
+	};
+
+	function syncViewBoxToContainer()
+	{
+		var rect = svg.getBoundingClientRect();
+
+		if (rect.width > 0 && rect.height > 0)
+		{
+			var cx = viewX + viewW / 2;
+			var cy = viewY + viewH / 2;
+			viewW = rect.width * zoom;
+			viewH = rect.height * zoom;
+			viewX = cx - viewW / 2;
+			viewY = cy - viewH / 2;
+			updateViewBox();
+		}
+	};
+
+	if (typeof ResizeObserver !== 'undefined')
+	{
+		new ResizeObserver(function() { syncViewBoxToContainer(); }).observe(svgContainer);
+	}
+
+	// Right: Point list panel
+	var listPanel = document.createElement('div');
+	listPanel.style.width = '200px';
+	listPanel.style.flexShrink = '0';
+	listPanel.style.overflowY = 'auto';
+	listPanel.style.border = '1px solid';
+	listPanel.style.borderColor = 'inherit';
+	listPanel.style.borderRadius = '4px';
+	listPanel.style.padding = '4px';
+	contentDiv.appendChild(listPanel);
+
+	function snapValue(val)
+	{
+		if (snapToGrid)
+		{
+			return Math.round(val / SNAP_SIZE) * SNAP_SIZE;
+		}
+
+		return Math.round(val);
+	};
+
+	function getSvgPoint(evt)
+	{
+		var rect = svg.getBoundingClientRect();
+		var clientX = evt.touches != null ? evt.touches[0].clientX : evt.clientX;
+		var clientY = evt.touches != null ? evt.touches[0].clientY : evt.clientY;
+		var x = viewX + ((clientX - rect.left) / rect.width) * viewW;
+		var y = viewY + ((clientY - rect.top) / rect.height) * viewH;
+
+		return {x: snapValue(x), y: snapValue(y)};
+	};
+
+	function getDefaultControlPoint(prevPt, pt)
+	{
+		var midX = (prevPt.x + pt.x) / 2;
+		var midY = (prevPt.y + pt.y) / 2;
+		var dx = pt.x - prevPt.x;
+		var dy = pt.y - prevPt.y;
+		var len = Math.sqrt(dx * dx + dy * dy);
+
+		if (len === 0)
+		{
+			return {x: midX, y: midY};
+		}
+
+		var px = -dy / len;
+		var py = dx / len;
+		var offset = len * 0.25;
+
+		return {x: Math.round(midX + px * offset), y: Math.round(midY + py * offset)};
+	};
+
+	function hitTestPoint(evt)
+	{
+		var rect = svg.getBoundingClientRect();
+		var clientX = evt.touches != null ? evt.touches[0].clientX : evt.clientX;
+		var clientY = evt.touches != null ? evt.touches[0].clientY : evt.clientY;
+		var rawX = viewX + ((clientX - rect.left) / rect.width) * viewW;
+		var rawY = viewY + ((clientY - rect.top) / rect.height) * viewH;
+		var hitRadius = (VERTEX_RADIUS + 4) * (viewW / CANVAS_SIZE);
+
+		// Check closing segment control point
+		if (closePath && points.length > 2 && points[0].type === 'Q')
+		{
+			var dx = points[0].cx - rawX;
+			var dy = points[0].cy - rawY;
+
+			if (Math.sqrt(dx * dx + dy * dy) <= hitRadius)
+			{
+				return {type: 'control', index: 0};
+			}
+		}
+
+		// Check control points first (they render on top)
+		for (var i = 1; i < points.length; i++)
+		{
+			if (points[i].type === 'Q')
+			{
+				var dx = points[i].cx - rawX;
+				var dy = points[i].cy - rawY;
+
+				if (Math.sqrt(dx * dx + dy * dy) <= hitRadius)
+				{
+					return {type: 'control', index: i};
+				}
+			}
+		}
+
+		for (var i = 0; i < points.length; i++)
+		{
+			var dx = points[i].x - rawX;
+			var dy = points[i].y - rawY;
+
+			if (Math.sqrt(dx * dx + dy * dy) <= hitRadius)
+			{
+				return {type: 'vertex', index: i};
+			}
+		}
+
+		return null;
+	};
+
+	function pushUndo()
+	{
+		undoStack.push(JSON.stringify(points));
+		redoStack = [];
+		updateUndoButtons();
+	};
+
+	function undo()
+	{
+		if (undoStack.length > 0)
+		{
+			redoStack.push(JSON.stringify(points));
+			points = JSON.parse(undoStack.pop());
+			selectedIndex = Math.min(selectedIndex, points.length - 1);
+			renderPolygon();
+			updateUndoButtons();
+		}
+	};
+
+	function redo()
+	{
+		if (redoStack.length > 0)
+		{
+			undoStack.push(JSON.stringify(points));
+			points = JSON.parse(redoStack.pop());
+			selectedIndex = Math.min(selectedIndex, points.length - 1);
+			renderPolygon();
+			updateUndoButtons();
+		}
+	};
+
+	function updateUndoButtons()
+	{
+		if (undoBtn != null)
+		{
+			undoBtn.style.opacity = undoStack.length > 0 ? '1' : '0.3';
+			undoBtn.style.pointerEvents = undoStack.length > 0 ? '' : 'none';
+		}
+
+		if (redoBtn != null)
+		{
+			redoBtn.style.opacity = redoStack.length > 0 ? '1' : '0.3';
+			redoBtn.style.pointerEvents = redoStack.length > 0 ? '' : 'none';
+		}
+	};
+
+	function renderPolygon()
+	{
+		// Update SVG path
+		var d = '';
+
+		for (var i = 0; i < points.length; i++)
+		{
+			if (i === 0)
+			{
+				d += 'M' + points[i].x + ' ' + points[i].y;
+			}
+			else if (points[i].type === 'Q')
+			{
+				d += 'Q' + points[i].cx + ' ' + points[i].cy +
+					' ' + points[i].x + ' ' + points[i].y;
+			}
+			else
+			{
+				d += 'L' + points[i].x + ' ' + points[i].y;
+			}
+		}
+
+		if (closePath && points.length > 2)
+		{
+			if (points[0].type === 'Q')
+			{
+				d += 'Q' + points[0].cx + ' ' + points[0].cy +
+					' ' + points[0].x + ' ' + points[0].y;
+			}
+
+			d += 'Z';
+		}
+
+		polyPath.setAttribute('d', d);
+		polyPath.setAttribute('fill', closePath && points.length > 2 ?
+			'rgba(66, 133, 244, 0.1)' : 'none');
+
+		// Update control point guide lines
+		while (controlGuideGroup.firstChild)
+		{
+			controlGuideGroup.removeChild(controlGuideGroup.firstChild);
+		}
+
+		for (var i = 1; i < points.length; i++)
+		{
+			if (points[i].type === 'Q')
+			{
+				var guideLine = document.createElementNS(svgNS, 'polyline');
+				guideLine.setAttribute('points',
+					points[i - 1].x + ',' + points[i - 1].y + ' ' +
+					points[i].cx + ',' + points[i].cy + ' ' +
+					points[i].x + ',' + points[i].y);
+				guideLine.setAttribute('fill', 'none');
+				guideLine.setAttribute('stroke', '#f0a030');
+				guideLine.setAttribute('stroke-width', '1');
+				guideLine.setAttribute('stroke-dasharray', '4,3');
+				controlGuideGroup.appendChild(guideLine);
+			}
+		}
+
+		if (closePath && points.length > 2 && points[0].type === 'Q')
+		{
+			var closingGuide = document.createElementNS(svgNS, 'polyline');
+			closingGuide.setAttribute('points',
+				points[points.length - 1].x + ',' + points[points.length - 1].y + ' ' +
+				points[0].cx + ',' + points[0].cy + ' ' +
+				points[0].x + ',' + points[0].y);
+			closingGuide.setAttribute('fill', 'none');
+			closingGuide.setAttribute('stroke', '#f0a030');
+			closingGuide.setAttribute('stroke-width', '1');
+			closingGuide.setAttribute('stroke-dasharray', '4,3');
+			controlGuideGroup.appendChild(closingGuide);
+		}
+
+		// Update vertex circles
+		while (vertexGroup.firstChild)
+		{
+			vertexGroup.removeChild(vertexGroup.firstChild);
+		}
+
+		for (var i = 0; i < points.length; i++)
+		{
+			var circle = document.createElementNS(svgNS, 'circle');
+			circle.setAttribute('cx', points[i].x);
+			circle.setAttribute('cy', points[i].y);
+			circle.setAttribute('r', VERTEX_RADIUS);
+			circle.setAttribute('fill', i === selectedIndex ? '#ff4444' : '#4285f4');
+			circle.setAttribute('stroke', '#fff');
+			circle.setAttribute('stroke-width', '1.5');
+			circle.style.cursor = 'move';
+			vertexGroup.appendChild(circle);
+		}
+
+		// Update control point handles
+		while (controlPointGroup.firstChild)
+		{
+			controlPointGroup.removeChild(controlPointGroup.firstChild);
+		}
+
+		for (var i = 1; i < points.length; i++)
+		{
+			if (points[i].type === 'Q')
+			{
+				var handle = document.createElementNS(svgNS, 'rect');
+				handle.setAttribute('x', points[i].cx - 5);
+				handle.setAttribute('y', points[i].cy - 5);
+				handle.setAttribute('width', 10);
+				handle.setAttribute('height', 10);
+				handle.setAttribute('fill', i === selectedIndex ? '#ff8800' : '#f0a030');
+				handle.setAttribute('stroke', '#fff');
+				handle.setAttribute('stroke-width', '1.5');
+				handle.style.cursor = 'move';
+				controlPointGroup.appendChild(handle);
+			}
+		}
+
+		if (closePath && points.length > 2 && points[0].type === 'Q')
+		{
+			var closingHandle = document.createElementNS(svgNS, 'rect');
+			closingHandle.setAttribute('x', points[0].cx - 5);
+			closingHandle.setAttribute('y', points[0].cy - 5);
+			closingHandle.setAttribute('width', 10);
+			closingHandle.setAttribute('height', 10);
+			closingHandle.setAttribute('fill', 0 === selectedIndex ? '#ff8800' : '#f0a030');
+			closingHandle.setAttribute('stroke', '#fff');
+			closingHandle.setAttribute('stroke-width', '1.5');
+			closingHandle.style.cursor = 'move';
+			controlPointGroup.appendChild(closingHandle);
+		}
+
+		updatePointList();
+	};
+
+	function updatePointList()
+	{
+		listPanel.innerHTML = '';
+
+		if (points.length === 0)
+		{
+			var hint = document.createElement('div');
+			hint.style.padding = '20px 10px';
+			hint.style.textAlign = 'center';
+			hint.style.opacity = '0.5';
+			hint.style.fontSize = '12px';
+			mxUtils.write(hint, mxResources.get('clickToAdd'));
+			listPanel.appendChild(hint);
+			return;
+		}
+
+		for (var i = 0; i < points.length; i++)
+		{
+			(function(idx)
+			{
+				var row = document.createElement('div');
+				row.style.display = 'flex';
+				row.style.alignItems = 'center';
+				row.style.padding = '2px 4px';
+				row.style.gap = '4px';
+				row.style.borderRadius = '3px';
+				row.style.marginBottom = '2px';
+				row.style.fontSize = '12px';
+				row.setAttribute('draggable', 'true');
+				row.setAttribute('data-idx', idx);
+
+				if (idx === selectedIndex)
+				{
+					row.style.backgroundColor = 'rgba(66, 133, 244, 0.15)';
+				}
+
+				row.style.cursor = 'pointer';
+
+				mxEvent.addListener(row, 'click', function()
+				{
+					selectedIndex = idx;
+					renderPolygon();
+				});
+
+				// Drag handle
+				var dragHandle = document.createElement('span');
+				dragHandle.innerHTML = '&#9776;';
+				dragHandle.style.cursor = 'grab';
+				dragHandle.style.fontSize = '11px';
+				dragHandle.style.opacity = '0.4';
+				dragHandle.style.flexShrink = '0';
+				row.appendChild(dragHandle);
+
+				var label = document.createElement('span');
+				label.style.minWidth = '18px';
+				label.style.fontWeight = 'bold';
+				mxUtils.write(label, (idx + 1) + '');
+				row.appendChild(label);
+
+				var xInput = document.createElement('input');
+				xInput.type = 'number';
+				xInput.value = Math.round(points[idx].x);
+				xInput.style.width = '48px';
+				xInput.style.fontSize = '11px';
+				xInput.style.padding = '1px 3px';
+				xInput.title = 'X';
+
+				mxEvent.addListener(xInput, 'change', function()
+				{
+					pushUndo();
+					points[idx].x = parseInt(this.value) || 0;
+					renderPolygon();
+				});
+
+				mxEvent.addListener(xInput, 'click', function(e)
+				{
+					e.stopPropagation();
+				});
+
+				row.appendChild(xInput);
+
+				var yInput = document.createElement('input');
+				yInput.type = 'number';
+				yInput.value = Math.round(points[idx].y);
+				yInput.style.width = '48px';
+				yInput.style.fontSize = '11px';
+				yInput.style.padding = '1px 3px';
+				yInput.title = 'Y';
+
+				mxEvent.addListener(yInput, 'change', function()
+				{
+					pushUndo();
+					points[idx].y = parseInt(this.value) || 0;
+					renderPolygon();
+				});
+
+				mxEvent.addListener(yInput, 'click', function(e)
+				{
+					e.stopPropagation();
+				});
+
+				row.appendChild(yInput);
+
+				// Curve toggle (for closing segment when idx is 0 and path is closed)
+				if (idx > 0 || (idx === 0 && closePath && points.length > 2))
+				{
+					var curveLabel = document.createElement('label');
+					curveLabel.style.display = 'flex';
+					curveLabel.style.alignItems = 'center';
+					curveLabel.style.cursor = 'pointer';
+					curveLabel.style.flexShrink = '0';
+					curveLabel.title = mxResources.get('curved');
+
+					var curveCb = document.createElement('input');
+					curveCb.type = 'checkbox';
+					curveCb.checked = points[idx].type === 'Q';
+					curveCb.style.margin = '0';
+
+					mxEvent.addListener(curveCb, 'click', function(e)
+					{
+						e.stopPropagation();
+					});
+
+					mxEvent.addListener(curveCb, 'change', function()
+					{
+						pushUndo();
+
+						if (points[idx].type === 'Q')
+						{
+							points[idx].type = 'L';
+							delete points[idx].cx;
+							delete points[idx].cy;
+						}
+						else
+						{
+							var prevPt = idx > 0 ? points[idx - 1] : points[points.length - 1];
+							var defCp = getDefaultControlPoint(prevPt, points[idx]);
+							points[idx].type = 'Q';
+							points[idx].cx = defCp.x;
+							points[idx].cy = defCp.y;
+						}
+
+						renderPolygon();
+					});
+
+					curveLabel.appendChild(curveCb);
+					row.appendChild(curveLabel);
+				}
+
+				// Delete button
+				var delBtn = document.createElement('img');
+				delBtn.setAttribute('src', Editor.trashImage);
+				delBtn.style.cursor = 'pointer';
+				delBtn.style.marginLeft = 'auto';
+				delBtn.style.width = '14px';
+				delBtn.style.height = '14px';
+				delBtn.style.opacity = '0.5';
+				delBtn.style.flexShrink = '0';
+				delBtn.title = mxResources.get('delete');
+
+				if (Editor.isDarkMode())
+				{
+					delBtn.style.filter = 'invert(1)';
+				}
+
+				mxEvent.addListener(delBtn, 'click', function(e)
+				{
+					e.stopPropagation();
+					pushUndo();
+					points.splice(idx, 1);
+
+					if (selectedIndex >= points.length)
+					{
+						selectedIndex = points.length - 1;
+					}
+
+					renderPolygon();
+				});
+
+				row.appendChild(delBtn);
+
+				// Drag-and-drop handlers
+				mxEvent.addListener(row, 'dragstart', function(e)
+				{
+					listDragSource = idx;
+					row.style.opacity = '0.4';
+					e.dataTransfer.effectAllowed = 'move';
+					e.dataTransfer.setData('text/plain', '' + idx);
+					e.stopPropagation();
+				});
+
+				mxEvent.addListener(row, 'dragover', function(e)
+				{
+					e.preventDefault();
+					e.stopPropagation();
+					e.dataTransfer.dropEffect = 'move';
+					var targetIdx = parseInt(row.getAttribute('data-idx'));
+
+					if (listDragSource !== null && targetIdx !== listDragSource)
+					{
+						row.style.borderTop = targetIdx < listDragSource ?
+							'2px solid #4285f4' : '';
+						row.style.borderBottom = targetIdx > listDragSource ?
+							'2px solid #4285f4' : '';
+					}
+				});
+
+				mxEvent.addListener(row, 'dragleave', function(e)
+				{
+					row.style.borderTop = '';
+					row.style.borderBottom = '';
+				});
+
+				mxEvent.addListener(row, 'drop', function(e)
+				{
+					e.preventDefault();
+					e.stopPropagation();
+					row.style.borderTop = '';
+					row.style.borderBottom = '';
+					var targetIdx = parseInt(row.getAttribute('data-idx'));
+
+					if (listDragSource !== null && targetIdx !== listDragSource)
+					{
+						pushUndo();
+						var movedPoint = points.splice(listDragSource, 1)[0];
+						var insertIdx = targetIdx > listDragSource ? targetIdx - 1 : targetIdx;
+						points.splice(insertIdx, 0, movedPoint);
+
+						if (selectedIndex === listDragSource)
+						{
+							selectedIndex = insertIdx;
+						}
+						else if (listDragSource < selectedIndex && insertIdx >= selectedIndex)
+						{
+							selectedIndex--;
+						}
+						else if (listDragSource > selectedIndex && insertIdx <= selectedIndex)
+						{
+							selectedIndex++;
+						}
+
+						renderPolygon();
+					}
+
+					listDragSource = null;
+				});
+
+				mxEvent.addListener(row, 'dragend', function(e)
+				{
+					row.style.opacity = '';
+					row.style.borderTop = '';
+					row.style.borderBottom = '';
+					listDragSource = null;
+				});
+
+				listPanel.appendChild(row);
+			})(i);
+		}
+	};
+
+	// Mouse handling on SVG canvas
+	mxEvent.addGestureListeners(svg, function(evt)
+	{
+		if (spacePressed || evt.button === 1 || evt.button === 2) return;
+
+		var hit = hitTestPoint(evt);
+
+		if (hit != null)
+		{
+			// Start dragging an existing point
+			dragIndex = hit.index;
+			dragType = hit.type;
+			isDragging = true;
+			dragStarted = false;
+			selectedIndex = hit.index;
+			renderPolygon();
+		}
+		else
+		{
+			var pt = getSvgPoint(evt);
+			pushUndo();
+
+			if (points.length < 2)
+			{
+				// Not enough points for segments, just append
+				points.push({x: pt.x, y: pt.y, type: 'L'});
+				selectedIndex = points.length - 1;
+			}
+			else
+			{
+				// Find nearest segment and insert there
+				var bestDist = Infinity;
+				var bestSeg = points.length - 1;
+				var segCount = closePath ? points.length : points.length - 1;
+
+				for (var si = 0; si < segCount; si++)
+				{
+					var ni = (si + 1) % points.length;
+					var d = mxUtils.ptSegDistSq(points[si].x, points[si].y,
+						points[ni].x, points[ni].y, pt.x, pt.y);
+
+					if (d < bestDist)
+					{
+						bestDist = d;
+						bestSeg = si;
+					}
+				}
+
+				points.splice(bestSeg + 1, 0, {x: pt.x, y: pt.y, type: 'L'});
+				selectedIndex = bestSeg + 1;
+			}
+
+			dragIndex = selectedIndex;
+			dragType = 'vertex';
+			isDragging = true;
+			dragStarted = true;
+			renderPolygon();
+		}
+
+		mxEvent.consume(evt);
+	},
+	function(evt)
+	{
+		if (isDragging && dragIndex >= 0)
+		{
+			if (!dragStarted)
+			{
+				pushUndo();
+				dragStarted = true;
+			}
+
+			var pt = getSvgPoint(evt);
+
+			if (dragType === 'control')
+			{
+				points[dragIndex].cx = pt.x;
+				points[dragIndex].cy = pt.y;
+			}
+			else
+			{
+				points[dragIndex].x = pt.x;
+				points[dragIndex].y = pt.y;
+			}
+
+			renderPolygon();
+			mxEvent.consume(evt);
+		}
+	},
+	function(evt)
+	{
+		if (spacePressed || evt.button === 1 || evt.button === 2) return;
+
+		if (isDragging && dragIndex >= 0)
+		{
+			isDragging = false;
+			dragIndex = -1;
+			dragType = null;
+			mxEvent.consume(evt);
+		}
+	});
+
+	// Mouse wheel zoom on SVG
+	mxEvent.addListener(svg, 'wheel', function(evt)
+	{
+		evt.preventDefault();
+		var rect = svg.getBoundingClientRect();
+		var px = (evt.clientX - rect.left) / rect.width;
+		var py = (evt.clientY - rect.top) / rect.height;
+		var cursorX = viewX + px * viewW;
+		var cursorY = viewY + py * viewH;
+
+		var factor = evt.deltaY > 0 ? 1.15 : 1 / 1.15;
+		zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+
+		viewW = rect.width * zoom;
+		viewH = rect.height * zoom;
+		viewX = cursorX - px * viewW;
+		viewY = cursorY - py * viewH;
+		updateViewBox();
+	});
+
+	// Suppress context menu on SVG canvas
+	mxEvent.addListener(svg, 'contextmenu', function(evt)
+	{
+		evt.preventDefault();
+	});
+
+	// Pan (middle-click, right-click or Space+left-click)
+	mxEvent.addListener(svg, 'mousedown', function(evt)
+	{
+		if (evt.button === 1 || evt.button === 2 || (evt.button === 0 && spacePressed))
+		{
+			isPanning = true;
+			panStartX = evt.clientX;
+			panStartY = evt.clientY;
+			panStartViewX = viewX;
+			panStartViewY = viewY;
+			svg.style.cursor = 'grabbing';
+			evt.preventDefault();
+		}
+	});
+
+	var panMoveHandler = function(evt)
+	{
+		if (isPanning)
+		{
+			var rect = svg.getBoundingClientRect();
+			viewX = panStartViewX - (evt.clientX - panStartX) / rect.width * viewW;
+			viewY = panStartViewY - (evt.clientY - panStartY) / rect.height * viewH;
+			updateViewBox();
+			evt.preventDefault();
+		}
+	};
+
+	var panUpHandler = function(evt)
+	{
+		if (isPanning)
+		{
+			isPanning = false;
+			svg.style.cursor = spacePressed ? 'grab' : 'crosshair';
+		}
+	};
+
+	mxEvent.addListener(document, 'mousemove', panMoveHandler);
+	mxEvent.addListener(document, 'mouseup', panUpHandler);
+
+	// Bottom bar with all controls
+	var bottomBar = document.createElement('div');
+	bottomBar.style.display = 'flex';
+	bottomBar.style.alignItems = 'center';
+	bottomBar.style.gap = '6px';
+	bottomBar.style.position = 'absolute';
+	bottomBar.style.left = '0px';
+	bottomBar.style.right = '0px';
+	bottomBar.style.bottom = '0px';
+	bottomBar.style.height = '34px';
+
+	var undoBtn = editorUi.createToolbarButton(Editor.undoImage,
+		mxResources.get('undo'), function() { undo(); });
+	bottomBar.appendChild(undoBtn);
+
+	var redoBtn = editorUi.createToolbarButton(Editor.redoImage,
+		mxResources.get('redo'), function() { redo(); });
+	bottomBar.appendChild(redoBtn);
+
+	var zoomInBtn = editorUi.createToolbarButton(Editor.zoomInImage,
+		mxResources.get('zoomIn'), function()
+	{
+		zoomTo(zoom / 1.15);
+	});
+	bottomBar.appendChild(zoomInBtn);
+
+	var zoomOutBtn = editorUi.createToolbarButton(Editor.zoomOutImage,
+		mxResources.get('zoomOut'), function()
+	{
+		zoomTo(zoom * 1.15);
+	});
+	bottomBar.appendChild(zoomOutBtn);
+
+	var zoomFitBtn = editorUi.createToolbarButton(Editor.zoomFitImage,
+		mxResources.get('fit'), function()
+	{
+		var rect = svg.getBoundingClientRect();
+
+		if (rect.width > 0 && rect.height > 0)
+		{
+			if (zoom == 1)
+			{
+				// Fit: compute bounding box of points and fit to view
+				if (points.length > 0)
+				{
+					var minX = points[0].x, minY = points[0].y;
+					var maxX = points[0].x, maxY = points[0].y;
+
+					for (var i = 1; i < points.length; i++)
+					{
+						minX = Math.min(minX, points[i].x);
+						minY = Math.min(minY, points[i].y);
+						maxX = Math.max(maxX, points[i].x);
+						maxY = Math.max(maxY, points[i].y);
+
+						if (points[i].type === 'Q')
+						{
+							minX = Math.min(minX, points[i].cx);
+							minY = Math.min(minY, points[i].cy);
+							maxX = Math.max(maxX, points[i].cx);
+							maxY = Math.max(maxY, points[i].cy);
+						}
+					}
+
+					var pad = 20;
+					var bw = maxX - minX + pad * 2;
+					var bh = maxY - minY + pad * 2;
+					var sx = rect.width / bw;
+					var sy = rect.height / bh;
+					zoom = 1 / Math.min(sx, sy);
+					viewW = rect.width * zoom;
+					viewH = rect.height * zoom;
+					viewX = (minX - pad) + (bw - viewW) / 2;
+					viewY = (minY - pad) + (bh - viewH) / 2;
+				}
+				else
+				{
+					zoom = 1;
+					viewW = rect.width;
+					viewH = rect.height;
+					viewX = (CANVAS_SIZE - viewW) / 2;
+					viewY = (CANVAS_SIZE - viewH) / 2;
+				}
+			}
+			else
+			{
+				// Reset to zoom=1
+				zoom = 1;
+				viewW = rect.width * zoom;
+				viewH = rect.height * zoom;
+				viewX = (CANVAS_SIZE - viewW) / 2;
+				viewY = (CANVAS_SIZE - viewH) / 2;
+			}
+
+			updateViewBox();
+		}
+	});
+	bottomBar.appendChild(zoomFitBtn);
+
+	var deleteAllBtn = mxUtils.button(mxResources.get('deleteAll'), function()
+	{
+		if (points.length > 0)
+		{
+			pushUndo();
+			points = [];
+			selectedIndex = -1;
+			renderPolygon();
+		}
+	});
+	deleteAllBtn.className = 'geBtn';
+	deleteAllBtn.style.padding = '2px 10px';
+	deleteAllBtn.style.fontSize = '12px';
+	bottomBar.appendChild(deleteAllBtn);
+
+	// Separator
+	var sep = document.createElement('span');
+	sep.style.flexGrow = '1';
+	bottomBar.appendChild(sep);
+
+	// Snap to grid checkbox
+	var snapLabel = document.createElement('label');
+	snapLabel.style.display = 'flex';
+	snapLabel.style.alignItems = 'center';
+	snapLabel.style.gap = '4px';
+	snapLabel.style.fontSize = '12px';
+	snapLabel.style.cursor = 'pointer';
+	snapLabel.style.whiteSpace = 'nowrap';
+
+	var snapCb = document.createElement('input');
+	snapCb.type = 'checkbox';
+	snapCb.checked = snapToGrid;
+
+	mxEvent.addListener(snapCb, 'change', function()
+	{
+		snapToGrid = this.checked;
+		gridRect.style.display = snapToGrid ? '' : 'none';
+	});
+
+	snapLabel.appendChild(snapCb);
+	mxUtils.write(snapLabel, mxResources.get('grid'));
+	bottomBar.appendChild(snapLabel);
+
+	// Close path checkbox
+	var closeLabel = document.createElement('label');
+	closeLabel.style.display = 'flex';
+	closeLabel.style.alignItems = 'center';
+	closeLabel.style.gap = '4px';
+	closeLabel.style.fontSize = '12px';
+	closeLabel.style.cursor = 'pointer';
+	closeLabel.style.whiteSpace = 'nowrap';
+
+	var closeCb = document.createElement('input');
+	closeCb.type = 'checkbox';
+	closeCb.checked = closePath;
+
+	mxEvent.addListener(closeCb, 'change', function()
+	{
+		closePath = this.checked;
+		renderPolygon();
+	});
+
+	closeLabel.appendChild(closeCb);
+	mxUtils.write(closeLabel, mxResources.get('closePath'));
+	bottomBar.appendChild(closeLabel);
+
+	// Apply/Cancel buttons
+	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+	{
+		editorUi.hideDialog();
+	});
+	cancelBtn.className = 'geBtn';
+
+	var applyBtn = mxUtils.button(mxResources.get('apply'), function()
+	{
+		if (points.length < 2)
+		{
+			editorUi.showError(mxResources.get('error'),
+				mxResources.get('minTwoPoints'),
+				mxResources.get('ok'));
+			return;
+		}
+
+		// Compute bounding box of all points and control points
+		var bminX = points[0].x, bmaxX = points[0].x;
+		var bminY = points[0].y, bmaxY = points[0].y;
+
+		for (var i = 0; i < points.length; i++)
+		{
+			bminX = Math.min(bminX, points[i].x);
+			bmaxX = Math.max(bmaxX, points[i].x);
+			bminY = Math.min(bminY, points[i].y);
+			bmaxY = Math.max(bmaxY, points[i].y);
+
+			if (points[i].type === 'Q')
+			{
+				bminX = Math.min(bminX, points[i].cx);
+				bmaxX = Math.max(bmaxX, points[i].cx);
+				bminY = Math.min(bminY, points[i].cy);
+				bmaxY = Math.max(bmaxY, points[i].cy);
+			}
+		}
+
+		var rangeX = bmaxX - bminX;
+		var rangeY = bmaxY - bminY;
+
+		// Normalize coordinates to bounding box (0-1 range)
+		var nx = function(val)
+		{
+			return rangeX > 0 ? Math.round(((val - bminX) / rangeX) * 100) / 100 : 0.5;
+		};
+
+		var ny = function(val)
+		{
+			return rangeY > 0 ? Math.round(((val - bminY) / rangeY) * 100) / 100 : 0.5;
+		};
+
+		var newCoords = [];
+		var newCurves = [];
+
+		for (var i = 0; i < points.length; i++)
+		{
+			newCoords.push([nx(points[i].x), ny(points[i].y)]);
+
+			if (i > 0)
+			{
+				if (points[i].type === 'Q')
+				{
+					newCurves.push(['Q', nx(points[i].cx), ny(points[i].cy)]);
+				}
+				else
+				{
+					newCurves.push([]);
+				}
+			}
+		}
+
+		// Handle closing segment curve
+		if (closePath && points.length > 2 && points[0].type === 'Q')
+		{
+			newCurves.push(['Q', nx(points[0].cx), ny(points[0].cy)]);
+		}
+
+		// Update cell geometry to maintain visual position and size
+		var geo = graph.getCellGeometry(cell);
+
+		if (geo != null)
+		{
+			geo = geo.clone();
+
+			if (rangeX > 0)
+			{
+				geo.x = geo.x + (bminX / CANVAS_SIZE) * geo.width;
+				geo.width = (rangeX / CANVAS_SIZE) * geo.width;
+			}
+
+			if (rangeY > 0)
+			{
+				geo.y = geo.y + (bminY / CANVAS_SIZE) * geo.height;
+				geo.height = (rangeY / CANVAS_SIZE) * geo.height;
+			}
+		}
+
+		graph.getModel().beginUpdate();
+
+		try
+		{
+			if (geo != null)
+			{
+				graph.getModel().setGeometry(cell, geo);
+			}
+
+			graph.setCellStyles('polyCoords', JSON.stringify(newCoords), [cell]);
+			graph.setCellStyles('polyCurves', JSON.stringify(newCurves), [cell]);
+			graph.setCellStyles('polyline', closePath ? '0' : '1', [cell]);
+		}
+		finally
+		{
+			graph.getModel().endUpdate();
+		}
+
+		editorUi.hideDialog();
+	});
+	applyBtn.className = 'geBtn gePrimaryBtn';
+
+	if (editorUi.editor.cancelFirst)
+	{
+		bottomBar.appendChild(cancelBtn);
+		bottomBar.appendChild(applyBtn);
+	}
+	else
+	{
+		bottomBar.appendChild(applyBtn);
+		bottomBar.appendChild(cancelBtn);
+	}
+
+	div.appendChild(bottomBar);
+
+	// Keyboard handling
+	mxEvent.addListener(div, 'keydown', function(evt)
+	{
+		if (evt.keyCode === 32) // Space
+		{
+			if (!spacePressed)
+			{
+				spacePressed = true;
+				svg.style.cursor = 'grab';
+			}
+
+			mxEvent.consume(evt);
+			return;
+		}
+
+		if (evt.keyCode === 46 || evt.keyCode === 8) // Delete/Backspace
+		{
+			if (selectedIndex >= 0 && selectedIndex < points.length)
+			{
+				if (evt.target.tagName !== 'INPUT')
+				{
+					pushUndo();
+					points.splice(selectedIndex, 1);
+
+					if (selectedIndex >= points.length)
+					{
+						selectedIndex = points.length - 1;
+					}
+
+					renderPolygon();
+					mxEvent.consume(evt);
+				}
+			}
+		}
+		else if (evt.keyCode === 90 && (evt.ctrlKey || evt.metaKey)) // Ctrl+Z
+		{
+			if (evt.shiftKey)
+			{
+				redo();
+			}
+			else
+			{
+				undo();
+			}
+
+			mxEvent.consume(evt);
+		}
+		else if (evt.keyCode === 89 && (evt.ctrlKey || evt.metaKey)) // Ctrl+Y
+		{
+			redo();
+			mxEvent.consume(evt);
+		}
+	});
+
+	mxEvent.addListener(div, 'keyup', function(evt)
+	{
+		if (evt.keyCode === 32)
+		{
+			spacePressed = false;
+
+			if (!isPanning)
+			{
+				svg.style.cursor = 'crosshair';
+			}
+		}
+	});
+
+	// Initial render
+	renderPolygon();
+	updateUndoButtons();
+
+	this.init = function()
+	{
+		div.focus();
+		var rect = svg.getBoundingClientRect();
+
+		if (rect.width > 0 && rect.height > 0)
+		{
+			zoom = 1;
+			viewW = rect.width * zoom;
+			viewH = rect.height * zoom;
+			viewX = (CANVAS_SIZE - viewW) / 2;
+			viewY = (CANVAS_SIZE - viewH) / 2;
+			updateViewBox();
+		}
+	};
+
+	this.destroy = function()
+	{
+		mxEvent.removeListener(document, 'mousemove', scrollMoveHandler);
+		mxEvent.removeListener(document, 'mouseup', scrollUpHandler);
+		mxEvent.removeListener(document, 'mousemove', panMoveHandler);
+		mxEvent.removeListener(document, 'mouseup', panUpHandler);
+	};
 
 	this.container = div;
 };

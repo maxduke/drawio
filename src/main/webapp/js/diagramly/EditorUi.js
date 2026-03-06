@@ -2051,7 +2051,35 @@
 	};
 
 	/**
-	 * 
+	 * Parses and caches file-level variables from the fileNode.
+	 * Re-parses only when the raw attribute string has changed.
+	 */
+	EditorUi.prototype.updateFileVars = function()
+	{
+		var varsStr = (this.fileNode != null) ?
+			this.fileNode.getAttribute('vars') : null;
+
+		if (varsStr !== this.fileVarsStr)
+		{
+			this.fileVarsStr = varsStr;
+			this.fileVars = null;
+
+			if (varsStr != null && varsStr.length > 0)
+			{
+				try
+				{
+					this.fileVars = JSON.parse(varsStr);
+				}
+				catch (e)
+				{
+					// ignore
+				}
+			}
+		}
+	};
+
+	/**
+	 *
 	 */
 	EditorUi.prototype.setFileData = function(data, file)
 	{
@@ -5521,7 +5549,8 @@
 					else if (mimeType != null && mimeType.substring(0, 9) == 'text/html')
 					{
 						var dlg = new EmbedDialog(this, data);
-						this.showDialog(dlg.container, 450, 240, true, true);
+						this.showDialog(dlg.container, 450, 270, true, true, null,
+							false, null, new mxRectangle(0, 0, 400, 250));
 						dlg.init();
 					}
 					else
@@ -11485,7 +11514,28 @@
 
 		// Shows link icons in main graph
 		graph.showLinkIcons = Editor.showLinkIcons;
-		
+		graph.showTooltipIcons = Editor.showTooltipIcons;
+
+		// Resolves page links to page names for link overlay tooltips
+		var editorUi = this;
+
+		graph.getLinkOverlayTooltip = function(link)
+		{
+			if (Graph.isPageLink(link) && editorUi.pages != null)
+			{
+				var id = link.substring(link.indexOf(',') + 1);
+				var page = editorUi.getPageById(id);
+
+				if (page != null)
+				{
+					return page.getName() || mxResources.get('pageWithNumber',
+						[mxUtils.indexOf(editorUi.pages, page) + 1]);
+				}
+			}
+
+			return link;
+		};
+
 		// Stops panning while freehand is active
 		if (Graph.touchStyle)
 		{
@@ -11975,17 +12025,30 @@
 		{
 			var vars = graphGetExportVariables.apply(this, arguments);
 			var file = ui.getCurrentFile();
-			
+
 			if (file != null)
 			{
 				vars['filename'] = file.getTitle();
 			}
-			
+
+			ui.updateFileVars();
+
+			if (ui.fileVars != null)
+			{
+				for (var key in ui.fileVars)
+				{
+					if (vars[key] == null)
+					{
+						vars[key] = ui.fileVars[key];
+					}
+				}
+			}
+
 			vars['pagecount'] = (ui.pages != null) ? ui.pages.length : 1;
 			vars['page'] = (ui.currentPage != null) ? ui.currentPage.getName() : '';
 			vars['pagenumber'] = (ui.pages != null && ui.currentPage != null) ?
 				mxUtils.indexOf(ui.pages, ui.currentPage) + 1 : 1;
-			
+
 			return vars;
 		};
 
@@ -12020,7 +12083,19 @@
 				return (ui.pages != null) ? ui.pages.length : 1;
 			}
 			
-			return graphGetGlobalVariable.apply(this, arguments);
+			var val = graphGetGlobalVariable.apply(this, arguments);
+
+			if (val == null)
+			{
+				ui.updateFileVars();
+
+				if (ui.fileVars != null)
+				{
+					val = ui.fileVars[name];
+				}
+			}
+
+			return val;
 		};
 
 		// Forces update of filename placeholder
@@ -12957,7 +13032,8 @@
 			var source = mxEvent.getSource(evt);
 			
 			if (graph.container != null && graph.isEnabled() && !graph.isMouseDown && !graph.isEditing() &&
-				this.dialog == null && source.nodeName != 'INPUT' && source.nodeName != 'TEXTAREA' &&
+				this.dialog == null && source.nodeName != 'INPUT' &&
+				(source.nodeName != 'TEXTAREA' || source === this.typingShim) &&
 				source.contentEditable != 'true')
 			{
 				if (evt.keyCode == 224 /* FF */ || (!mxClient.IS_MAC && evt.keyCode == 17 /* Control */) ||
@@ -13459,6 +13535,499 @@
 				this.menus.commentsWindow = null;
 			}
 		}
+
+		if (this.dockManager != null)
+		{
+			this.dockManager.destroy();
+			this.dockManager = null;
+		}
+
+		if (this._dockResizeListener != null)
+		{
+			mxEvent.removeListener(window, 'resize', this._dockResizeListener);
+			this._dockResizeListener = null;
+		}
+	};
+
+	/**
+	 * Creates the dock manager for window docking to viewport edges.
+	 */
+	EditorUi.prototype.createDockManager = function()
+	{
+		var ui = this;
+
+		this.dockManager =
+		{
+			// All docked windows
+			windows: [],
+
+			// Distance in pixels from edge to trigger docking
+			threshold: 16,
+
+			// Preview overlay element
+			previewElement: null,
+
+			/**
+			 * Returns the dock zone for the given window position.
+			 * Zones: 'top-left', 'top-right', 'bottom-left', 'bottom-right',
+			 * 'left', 'right', 'top', 'bottom', or null.
+			 * Corners take priority when near two edges simultaneously.
+			 */
+			getDockZone: function(x, y, windowDiv)
+			{
+				var iw = window.innerWidth || document.documentElement.clientWidth ||
+					document.body.clientWidth;
+				var ih = window.innerHeight || document.documentElement.clientHeight ||
+					document.body.clientHeight;
+				var t = this.threshold;
+				var w = windowDiv.offsetWidth;
+				var h = windowDiv.offsetHeight;
+
+				var nearLeft = x <= t;
+				var nearRight = x + w >= iw - t;
+				var nearTop = y <= t;
+				var nearBottom = y + h >= ih - t;
+
+				// Corners first
+				if (nearLeft && nearTop) return 'top-left';
+				if (nearRight && nearTop) return 'top-right';
+				if (nearLeft && nearBottom) return 'bottom-left';
+				if (nearRight && nearBottom) return 'bottom-right';
+
+				// Edges
+				if (nearLeft) return 'left';
+				if (nearRight) return 'right';
+				if (nearTop) return 'top';
+				if (nearBottom) return 'bottom';
+
+				return null;
+			},
+
+			/**
+			 * Docks the given mxWindow to the specified zone.
+			 * Stores offsets from the relevant edges so the window
+			 * can be repositioned on browser resize.
+			 */
+			dock: function(wnd, zone)
+			{
+				var iw = window.innerWidth || document.documentElement.clientWidth ||
+					document.body.clientWidth;
+				var ih = window.innerHeight || document.documentElement.clientHeight ||
+					document.body.clientHeight;
+				var w = parseInt(wnd.div.style.width);
+				var h = parseInt(wnd.div.style.height);
+				var x = wnd.getX();
+				var y = wnd.getY();
+
+				wnd.dockState = zone;
+				wnd.div.classList.add('mxWindowDocked');
+
+				// Compute position and store anchor offsets.
+				// For each axis we store either an offset from the left/top
+				// (anchorRight/anchorBottom = false) or from the right/bottom
+				// (anchorRight/anchorBottom = true).
+				var anchorRight = zone.indexOf('right') >= 0;
+				var anchorBottom = zone.indexOf('bottom') >= 0;
+
+				// Pin to edge(s)
+				if (zone.indexOf('left') >= 0)
+				{
+					x = 0;
+				}
+				else if (zone.indexOf('right') >= 0)
+				{
+					x = iw - w;
+				}
+
+				if (zone.indexOf('top') >= 0)
+				{
+					y = 0;
+				}
+				else if (zone.indexOf('bottom') >= 0)
+				{
+					y = ih - h;
+				}
+
+				// For non-corner docks, decide anchor based on position
+				if (!anchorRight)
+				{
+					anchorRight = (x + w / 2) > (iw / 2);
+				}
+
+				if (!anchorBottom)
+				{
+					anchorBottom = (y + h / 2) > (ih / 2);
+				}
+
+				// Store anchor mode and offsets from the relevant edges
+				wnd._dockAnchorRight = anchorRight;
+				wnd._dockAnchorBottom = anchorBottom;
+				wnd._dockOffsetX = anchorRight ? (iw - x - w) : x;
+				wnd._dockOffsetY = anchorBottom ? (ih - y - h) : y;
+
+				this.windows.push(wnd);
+				this.pinToEdge(wnd);
+
+				wnd.fireEvent(new mxEventObject(mxEvent.DOCK, 'side', zone));
+			},
+
+			/**
+			 * Undocks the given mxWindow.
+			 */
+			undock: function(wnd)
+			{
+				var zone = wnd.dockState;
+
+				if (zone == null)
+				{
+					return;
+				}
+
+				for (var i = 0; i < this.windows.length; i++)
+				{
+					if (this.windows[i] === wnd)
+					{
+						this.windows.splice(i, 1);
+						break;
+					}
+				}
+
+				wnd.div.classList.remove('mxWindowDocked');
+				wnd.dockState = null;
+				wnd._dockAnchorRight = null;
+				wnd._dockAnchorBottom = null;
+				wnd._dockOffsetX = null;
+				wnd._dockOffsetY = null;
+
+				wnd.fireEvent(new mxEventObject(mxEvent.UNDOCK, 'side', zone));
+			},
+
+			/**
+			 * Repositions a docked window based on its dock state and
+			 * anchor offsets. Ensures the window stays within viewport.
+			 */
+			pinToEdge: function(wnd)
+			{
+				var zone = wnd.dockState;
+
+				if (zone == null)
+				{
+					return;
+				}
+
+				var iw = window.innerWidth || document.documentElement.clientWidth ||
+					document.body.clientWidth;
+				var ih = window.innerHeight || document.documentElement.clientHeight ||
+					document.body.clientHeight;
+				var w = parseInt(wnd.div.style.width);
+				var h = parseInt(wnd.div.style.height);
+
+				// Compute x from anchor
+				var x;
+
+				if (wnd._dockAnchorRight)
+				{
+					x = iw - w - (wnd._dockOffsetX || 0);
+				}
+				else
+				{
+					x = wnd._dockOffsetX || 0;
+				}
+
+				// Compute y from anchor
+				var y;
+
+				if (wnd._dockAnchorBottom)
+				{
+					y = ih - h - (wnd._dockOffsetY || 0);
+				}
+				else
+				{
+					y = wnd._dockOffsetY || 0;
+				}
+
+				// Pin to edge(s) based on dock zone
+				if (zone.indexOf('left') >= 0)
+				{
+					x = 0;
+				}
+				else if (zone.indexOf('right') >= 0)
+				{
+					x = iw - w;
+				}
+
+				if (zone.indexOf('top') >= 0)
+				{
+					y = 0;
+				}
+				else if (zone.indexOf('bottom') >= 0)
+				{
+					y = ih - h;
+				}
+
+				// Clamp to viewport
+				x = Math.max(0, Math.min(x, iw - w));
+				y = Math.max(0, Math.min(y, ih - h));
+
+				wnd._relayouting = true;
+				mxWindow.prototype.setLocation.call(wnd, x, y);
+				wnd._relayouting = false;
+			},
+
+			/**
+			 * Re-pins all docked windows to their edges.
+			 */
+			layoutAll: function()
+			{
+				for (var i = 0; i < this.windows.length; i++)
+				{
+					this.pinToEdge(this.windows[i]);
+				}
+			},
+
+			/**
+			 * Shows the dock preview overlay for the given zone.
+			 */
+			showPreview: function(zone, wnd)
+			{
+				if (this.previewElement == null)
+				{
+					this.previewElement = document.createElement('div');
+					this.previewElement.className = 'geDockPreview';
+					document.body.appendChild(this.previewElement);
+				}
+
+				var iw = window.innerWidth || document.documentElement.clientWidth ||
+					document.body.clientWidth;
+				var ih = window.innerHeight || document.documentElement.clientHeight ||
+					document.body.clientHeight;
+				var el = this.previewElement;
+				var w = wnd.div.offsetWidth;
+				var h = wnd.div.offsetHeight;
+				var x = wnd.getX();
+				var y = wnd.getY();
+
+				// Pin preview to the target edge(s)
+				if (zone.indexOf('left') >= 0)
+				{
+					x = 0;
+				}
+				else if (zone.indexOf('right') >= 0)
+				{
+					x = iw - w;
+				}
+
+				if (zone.indexOf('top') >= 0)
+				{
+					y = 0;
+				}
+				else if (zone.indexOf('bottom') >= 0)
+				{
+					y = ih - h;
+				}
+
+				// Clamp to viewport
+				x = Math.max(0, Math.min(x, iw - w));
+				y = Math.max(0, Math.min(y, ih - h));
+
+				el.style.display = 'block';
+				el.style.left = x + 'px';
+				el.style.top = y + 'px';
+				el.style.width = w + 'px';
+				el.style.height = h + 'px';
+			},
+
+			/**
+			 * Hides the dock preview overlay.
+			 */
+			hidePreview: function()
+			{
+				if (this.previewElement != null)
+				{
+					this.previewElement.style.display = 'none';
+				}
+			},
+
+			/**
+			 * Removes a window from dock tracking.
+			 */
+			removeWindow: function(wnd)
+			{
+				for (var i = 0; i < this.windows.length; i++)
+				{
+					if (this.windows[i] === wnd)
+					{
+						this.windows.splice(i, 1);
+						break;
+					}
+				}
+			},
+
+			/**
+			 * Destroys the dock manager and cleans up.
+			 */
+			destroy: function()
+			{
+				if (this.previewElement != null &&
+					this.previewElement.parentNode != null)
+				{
+					this.previewElement.parentNode.removeChild(this.previewElement);
+					this.previewElement = null;
+				}
+			}
+		};
+
+		this._dockResizeListener = mxUtils.bind(this, function()
+		{
+			if (this.dockManager != null)
+			{
+				this.dockManager.layoutAll();
+			}
+		});
+
+		mxEvent.addListener(window, 'resize', this._dockResizeListener);
+	};
+
+	/**
+	 * Wraps installResizeHandler to add window docking behavior.
+	 */
+	var originalInstallResizeHandler = EditorUi.prototype.installResizeHandler;
+
+	EditorUi.prototype.installResizeHandler = function(dialog, resizable, destroy)
+	{
+		originalInstallResizeHandler.apply(this, arguments);
+
+		if (!EditorUi.windowed || !Editor.enableWindowDocking)
+		{
+			return;
+		}
+
+		var ui = this;
+		var wnd = dialog.window;
+
+		if (ui.dockManager == null)
+		{
+			ui.createDockManager();
+		}
+
+		var dockManager = ui.dockManager;
+		var isDragging = false;
+		var candidateDockZone = null;
+
+		// Wrap setLocation to prevent position changes while docked
+		var prevSetLocation = wnd.setLocation;
+
+		wnd.setLocation = function(x, y)
+		{
+			if (this.dockState != null && !this._undocking && !this._relayouting)
+			{
+				return;
+			}
+
+			prevSetLocation.call(this, x, y);
+		};
+
+		// Wrap setSize to prevent resize while docked
+		var prevSetSize = wnd.setSize;
+
+		wnd.setSize = function(w, h)
+		{
+			if (this.dockState != null)
+			{
+				return;
+			}
+
+			prevSetSize.call(this, w, h);
+		};
+
+		// Dock detection via move events
+		wnd.addListener(mxEvent.MOVE_START, function(sender, evt)
+		{
+			isDragging = true;
+			candidateDockZone = null;
+
+			if (wnd.dockState != null)
+			{
+				wnd._undocking = true;
+				dockManager.undock(wnd);
+				wnd._undocking = false;
+			}
+		});
+
+		wnd.addListener(mxEvent.MOVE, function(sender, evt)
+		{
+			if (!isDragging)
+			{
+				return;
+			}
+
+			var zone = dockManager.getDockZone(wnd.getX(), wnd.getY(), wnd.div);
+
+			if (zone != candidateDockZone)
+			{
+				candidateDockZone = zone;
+
+				if (zone != null)
+				{
+					dockManager.showPreview(zone, wnd);
+				}
+				else
+				{
+					dockManager.hidePreview();
+				}
+			}
+		});
+
+		wnd.addListener(mxEvent.MOVE_END, function(sender, evt)
+		{
+			isDragging = false;
+			dockManager.hidePreview();
+
+			if (candidateDockZone != null)
+			{
+				dockManager.dock(wnd, candidateDockZone);
+			}
+
+			candidateDockZone = null;
+		});
+
+		// Re-pin after minimize/normalize changes height
+		wnd.addListener(mxEvent.NORMALIZE, function(sender, evt)
+		{
+			if (wnd.dockState != null)
+			{
+				dockManager.pinToEdge(wnd);
+			}
+		});
+
+		// Undock before maximizing
+		wnd.addListener(mxEvent.MAXIMIZE, function(sender, evt)
+		{
+			if (wnd.dockState != null)
+			{
+				wnd._undocking = true;
+				dockManager.undock(wnd);
+				wnd._undocking = false;
+			}
+		});
+
+		// Re-pin when shown again if still docked
+		wnd.addListener(mxEvent.SHOW, function(sender, evt)
+		{
+			if (wnd.dockState != null)
+			{
+				dockManager.pinToEdge(wnd);
+			}
+		});
+
+		// Clean up dock state on destroy
+		var prevDestroy = dialog.destroy;
+
+		dialog.destroy = function()
+		{
+			dockManager.removeWindow(wnd);
+			prevDestroy.apply(this, arguments);
+		};
 	};
 
 	/**
@@ -13733,8 +14302,8 @@
 			var ui = this;
 			var x = Math.max(10, this.diagramContainer.parentNode.clientWidth - 256);
 			var y = 60;
-			var h = (urlParams['embedInline'] == '1') ? 580 :
-				((urlParams['sketch'] == '1') ? 580 : Math.min(566,
+			var h = (urlParams['embedInline'] == '1') ? 600 :
+				((urlParams['sketch'] == '1') ? 600 : Math.min(600,
 					this.editor.graph.container.clientHeight - 10));
 			
 			this.formatWindow = new WrapperWindow(this, mxResources.get('format'), x, y, 240, h,
@@ -19561,7 +20130,12 @@
 		{
 			serviceCount++
 		}
-		
+
+		if (this.m365 != null)
+		{
+			serviceCount++
+		}
+
 		if (this.gitHub != null)
 		{
 			serviceCount++
@@ -19705,7 +20279,6 @@
 		var editable = (urlParams['embed'] == '1' &&
 			this.editor.graph.isEnabled()) ||
 			(file != null && file.isEditable());
-		
 		this.actions.get('undo').setEnabled(this.canUndo() && editable);
 		this.actions.get('redo').setEnabled(this.canRedo() && editable);
 		this.actions.get('autosave').setEnabled(file != null && file.isEditable() && file.isAutosaveOptional());
@@ -19713,6 +20286,8 @@
 		this.actions.get('editData').setEnabled(graph.isEnabled());
 		this.actions.get('explore').setEnabled(active && (ss.edges.length == 1 || ss.vertices.length == 1));
 		this.actions.get('editConnectionPoints').setEnabled(active && ss.edges.length == 0 && ss.vertices.length == 1);
+		this.actions.get('editPolygon').setEnabled(active && ss.vertices.length == 1 &&
+			ss.style[mxConstants.STYLE_SHAPE] == 'mxgraph.basic.polygon');
 		this.actions.get('editImage').setEnabled(active && ss.image && ss.cells.length > 0);
 		this.actions.get('crop').setEnabled(active && ss.image && ss.cells.length > 0);
 		this.actions.get('pageSetup').setEnabled(active);

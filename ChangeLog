@@ -1,3 +1,63 @@
+05-MAR-2026: 29.6.1
+
+- Removes i18n updating from actions
+- Fix Cloud Build when using custom service account
+- Hide cell ID and make Edit Data dialog resizable for file-level vars
+- Prevent focus stealing from external input elements in showTypingShim [DID-17955]
+- Adds showTooltipIcons switch
+- Reset sync channel on makeCopy to prevent cross-talk with original file [jgraph/drawio#5487]
+- Increase dialog height for EmbedDialog instances to improve layout
+- Make EmbedDialog resizable with flex layout
+- Hides hints while zooming [jgraph/drawio#5486]
+
+27-FEB-2026: 29.6.0
+
+- Fix MS365 SharePoint file picker integration
+- Sets ms365 integration live
+- Adds format=0 and sidebar=0 URL params for minimal theme
+
+26-FEB-2026: 29.5.6
+
+- AWS shapes update
+- Adds ms365 URL parameter
+
+26-FEB-2026: 29.5.5
+
+- Fixes possible NPE in mxLayoutManager
+- Fixes return value in Graph.cellsResized override
+- Fixes line submenu in edge context menu
+- Adds new dialog styles
+- Adds file-specific variables [jgraph/drawio#549] [jgraph/drawio#2911] [jgraph/drawio-desktop#2108]
+
+25-FEB-2026: 29.5.4
+
+- Fixes elbow edge style icons
+- Fixes update of toolbar edge styles with selected vertices
+- Fixes order of horizontal and vertical edge option in Format panel, toolbar, inline toolbar and context menu
+- Makes inline toolbar visible by default, uses line menu
+- Fixes tooltips for inline toolbar
+- Fixes inconsistent edge menus
+- Adds dockable tool windows
+- Fixes possible stale dropdown menu
+- Fixes clipping of labels for Chrome on Windows
+- Fixes inconsistent tooltips in Format panel
+- Adds tooltips for checkboxes in Format panel
+- Adds autosizeText cell style and sticky notes with automatic text size [jgraph/drawio#2570]
+- Fixes background image translation in GraphViewer (almost all code overrides getGraphBounds of graph and not viewer which graph.fit uses) [DID-17873]
+
+24-FEB-2026: 29.5.3
+
+- Hides link icons if showLinkIcons disabled
+- Fixes IME first keystroke [jgraph/drawio#3642] [jgraph/drawio#4801] [jgraph/drawio#313]
+- Fixes broken copy/paste after IME fix
+- Fixes error message for missing animations
+- Adds zigzag shape in Misc sidebar  [jgraph/drawio#4663]
+- Adds insert and edit polygon actions [jgraph/drawio#5292]
+- Fixes broken panning after IME fix
+- Adds optional inline toolbar for edge styles [jgraph/drawio#4794]
+- Simplifies horizontal and vertical elbow edge style icons
+- Fix VSDX import: make Visio containers non-connectable and add hyperlink null guard [DID-17660]
+
 22-FEB-2026: 29.5.2
 
 - Deletes unused code causing security warnings

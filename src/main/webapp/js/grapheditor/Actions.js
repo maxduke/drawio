@@ -849,6 +849,11 @@ Actions.prototype.init = function()
 
 					if (graph.getModel().isVertex(cell))
 					{
+						if (graph.isAutosizeTextCell(cell))
+						{
+							graph.setCellStyles('autosizeText', null, [cell]);
+						}
+
 						if (graph.getModel().getChildCount(cell) > 0)
 						{
 							graph.updateGroupBounds([cell], 0, true);
@@ -1844,6 +1849,26 @@ Actions.prototype.init = function()
 	action.setToggleAction(true);
 	action.setSelectedCallback(mxUtils.bind(this, function() { return this.outlineWindow != null && this.outlineWindow.window.isVisible(); }));
 
+	this.addAction('editPolygon...', function()
+	{
+		var cell = graph.getSelectionCell();
+
+		if (graph.isEnabled() && cell != null)
+		{
+			var state = graph.view.getState(cell);
+
+			if (state != null && mxUtils.getValue(state.style,
+				mxConstants.STYLE_SHAPE) === 'mxgraph.basic.polygon')
+			{
+				var dlg = new PolygonDialog(ui, cell);
+				ui.showDialog(dlg.container, 680, 540, true, true,
+					function() { dlg.destroy(); },
+					null, null, new mxRectangle(0, 0, 740, 600));
+				dlg.init();
+			}
+		}
+	}).isEnabled = isGraphEnabled;
+
 	this.addAction('editConnectionPoints...', function()
 	{
 		var cell = graph.getSelectionCell();
@@ -1852,10 +1877,10 @@ Actions.prototype.init = function()
 			cell != null && cell.geometry != null)
 		{
 			var dlg = new ConnectionPointsDialog(ui, cell);
-	    	ui.showDialog(dlg.container, 350, 450, true, false, function()
+	    	ui.showDialog(dlg.container, 400, 450, true, false, function()
 			{
 				dlg.destroy();
-			}, null, null, new mxRectangle(0, 0, 350 + 60, 450 + 60));
+			}, null, null, new mxRectangle(0, 0, 400 + 50, 450 + 50));
 			dlg.init();
 		}
 	}, null, null,  Editor.altKey + '+' + Editor.shiftKey + '+Q').isEnabled = isGraphEnabled;

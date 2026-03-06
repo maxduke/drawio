@@ -391,7 +391,7 @@
 						var dlg = new EmbedDialog(editorUi, editorUi.createLink(linkTarget, linkColor,
 							allPages, lightbox, editLink, layers, null, true, params, null,
 							currentPage, null, darkMode));
-						editorUi.showDialog(dlg.container, 450, 270, true, true);
+						editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 						dlg.init();
 					}, null, true, true);
 			}));
@@ -1062,7 +1062,7 @@
 									'/' + editorUi.getSearch() + '#_CONFIG_' +
 									Graph.compress(JSON.stringify(obj));
 								var dlg = new EmbedDialog(editorUi, url);
-								editorUi.showDialog(dlg.container, 450, 240, true);
+								editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 								dlg.init();
 							}
 							catch (e)
@@ -2329,7 +2329,7 @@
 				dlg.init();
 			}
 		})).isEnabled = isGraphEnabled;
-		
+
 		if (!editorUi.isOffline())
 		{
 			if (urlParams['embed'] != '1')
@@ -2380,7 +2380,7 @@
 								var dlg = new EmbedDialog(editorUi, editorUi.createLink(linkTarget, linkColor,
 									true, lightbox, editLink, layers, (link == 'public') ? publicUrl : null,
 									null, params, null, currentPage, null, darkMode));
-								editorUi.showDialog(dlg.container, 450, 240, true, true);
+								editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 								dlg.init();
 							}, null, true);
 					});
@@ -2474,7 +2474,7 @@
 										editorUi.handleError(e);
 									}
 								});
-								editorUi.showDialog(dlg.container, 450, 240, true, true);
+								editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 								dlg.init();
 							}), theme);
 					});
@@ -2493,7 +2493,7 @@
 						{
 							var dlg = new EmbedDialog(editorUi, '<img src="' + ((current.constructor != DriveFile) ?
 								url : 'https://drive.google.com/uc?id=' + current.getId()) + '"/>');
-							editorUi.showDialog(dlg.container, 450, 240, true, true);
+							editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 							dlg.init();
 						}
 						else
@@ -2514,7 +2514,7 @@
 						{
 							editorUi.spinner.stop();
 							var dlg = new EmbedDialog(editorUi, result);
-							editorUi.showDialog(dlg.container, 450, 240, true, true);
+							editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 							dlg.init();
 						}, function(err)
 						{
@@ -2534,9 +2534,9 @@
 						editorUi.createEmbedSvg(fit, shadow, image, lightbox, editLink, layers, function(result)
 						{
 							editorUi.spinner.stop();
-							
+
 							var dlg = new EmbedDialog(editorUi, result);
-							editorUi.showDialog(dlg.container, 450, 240, true, true);
+							editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 							dlg.init();
 						}, function(err)
 						{
@@ -2572,7 +2572,7 @@
 								true, lightbox, editLink, layers, (link == 'public') ? publicUrl : null,
 								null, params, null, currentPage, transparent, darkMode) + '"' + ((transparent) ?
 								' allowtransparency="true"' : '') + '></iframe>');
-							editorUi.showDialog(dlg.container, 450, 240, true, true);
+							editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 							dlg.init();
 						}, true, true);
 				});
@@ -2597,7 +2597,7 @@
 						var dlg = new EmbedDialog(editorUi, editorUi.createLink(linkTarget, linkColor,
 							true, lightbox, editLink, layers, (link == 'public') ? publicUrl : null,
 							null, params, null, currentPage, null, darkMode));
-						editorUi.showDialog(dlg.container, 450, 240, true, true);
+						editorUi.showDialog(dlg.container, 450, 270, true, true, null, false, null, new mxRectangle(0, 0, 400, 250));
 						dlg.init();
 					}, null, true);
 			});
@@ -3597,9 +3597,7 @@
 		{
 			if (graph.isEnabled() && !graph.isCellLocked(graph.getDefaultParent()))
 			{
-    	    	insertVertex('', 140, 160, 'shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;' +
-					'fontColor=#000000;darkOpacity=0.05;fillColor=#FFF9B2;strokeColor=none;fillStyle=solid;' +
-					'direction=west;gradientDirection=north;gradientColor=#FFF2A1;shadow=1;size=20;pointerEvents=1;',
+    	    	insertVertex('', 160, 160, Editor.defaultNoteStyle,
 					(evt != null && !mxEvent.isControlDown(evt) && !mxEvent.isMetaDown(evt) &&
 					graph.isMouseInsertPoint()) ? graph.getInsertPoint() : null);
 			}
@@ -3635,6 +3633,33 @@
 			}
 		}, null, null, 'C')).isEnabled = isGraphEnabled;
 
+		editorUi.actions.put('insertPolygon', new Action('polygon' + '...', function(evt)
+		{
+			if (graph.isEnabled() && !graph.isCellLocked(graph.getDefaultParent()))
+			{
+				var cell = insertVertex('', 80, 80,
+					'shape=mxgraph.basic.polygon;polyCoords=[[0.5,0],[1,0.38],' +
+					'[0.81,1],[0.19,1],[0,0.38]];polyline=0;whiteSpace=wrap;html=1;',
+					(evt != null && !mxEvent.isControlDown(evt) &&
+					!mxEvent.isMetaDown(evt) && graph.isMouseInsertPoint()) ?
+					graph.getInsertPoint() : null);
+
+				if (cell != null)
+				{
+					var state = graph.view.getState(cell);
+
+					if (state != null)
+					{
+						var dlg = new PolygonDialog(editorUi, cell);
+						editorUi.showDialog(dlg.container, 680, 540, true, true,
+							function() { dlg.destroy(); },
+							null, null, new mxRectangle(0, 0, 740, 600));
+						dlg.init();
+					}
+				}
+			}
+		})).isEnabled = isGraphEnabled;
+
 		var toggleShapes = editorUi.actions.put('toggleShapes', new Action('shapes', function()
         {
 			if (editorUi.sidebarWindow != null)
@@ -3663,7 +3688,7 @@
 				editorUi.menus.addSubmenu('table', menu, parent);
 				menu.addSeparator(parent);
 				editorUi.menus.addMenuItems(menu, ['insertText', 'insertLink', '-',
-					'insertImage', 'createShape', '-'], parent);
+					'insertImage', 'createShape', 'insertPolygon', '-'], parent);
 
 				if (editorUi.insertTemplateEnabled && !editorUi.isOffline())
 				{
@@ -3683,7 +3708,7 @@
 			{
 				this.addMenuItems(menu, ['insertRectangle', 'insertEllipse', 'insertRhombus',
 					'-', 'insertEdge', 'insertNote', '-', 'insertText', 'insertLink',
-					'-', 'insertImage', 'createShape', '-'], parent);
+					'-', 'insertImage', 'createShape', 'insertPolygon', '-'], parent);
 				
 				if (editorUi.insertTemplateEnabled && !editorUi.isOffline())
 				{
@@ -3813,6 +3838,21 @@
 			else if (editorUi.isModeEnabled(App.MODE_ONEDRIVE))
 			{
 				menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
+				{
+					// do nothing
+				}, parent, null, false);
+			}
+
+			if (editorUi.isModeReady(App.MODE_M365))
+			{
+				menu.addItem(mxResources.get('m365') + '...', null, function()
+				{
+					editorUi.pickFile(App.MODE_M365);
+				}, parent);
+			}
+			else if (editorUi.isModeEnabled(App.MODE_M365))
+			{
+				menu.addItem(mxResources.get('m365') + ' (' + mxResources.get('loading') + '...)', null, function()
 				{
 					// do nothing
 				}, parent, null, false);
@@ -4351,7 +4391,7 @@
 		{
 			// Last entry edits cell label
 			this.addMenuItems(menu, ['editLink', 'editShape', 'editImage', 'crop', '-',
-				'editData', 'copyData', 'pasteData', '-', 'editConnectionPoints',
+				'editData', 'copyData', 'pasteData', '-', 'editPolygon', 'editConnectionPoints',
 				'editGeometry', '-', 'editTooltip', 'editStyle', '-', 'edit'], parent);
 		})));
 				

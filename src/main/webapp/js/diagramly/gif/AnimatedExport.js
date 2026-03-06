@@ -56,8 +56,7 @@ AnimatedGifExport.prototype.doExport = function(options, callback, errorCallback
 		{
 			if (errorCallback != null)
 			{
-				errorCallback(new Error(mxResources.get('noFlowAnimations',
-					null, 'No flow animations found in diagram')));
+				errorCallback(new Error(mxResources.get('noAnimationsInDiagram')));
 			}
 
 			return;

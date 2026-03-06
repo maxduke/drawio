@@ -22,7 +22,7 @@ if (!mxIsElectron)
 			'img-src * data: blob:; media-src * data:; font-src * data:; ' +
 			// www.draw.io required for browser data migration to app.diagrams.net and
 			// viewer.diagrams.net required for iframe embed preview
-			'frame-src %frame-src% \'self\' https://viewer.diagrams.net https://www.draw.io https://*.google.com; ' +
+			'frame-src %frame-src% \'self\' https://viewer.diagrams.net https://www.draw.io https://*.google.com https://*.sharepoint.com https://login.microsoftonline.com; ' +
 			'style-src %style-src% \'self\' https://fonts.googleapis.com \'unsafe-inline\'; ' +
 			'base-uri \'none\'; ' +
 			'child-src \'self\'; ' +

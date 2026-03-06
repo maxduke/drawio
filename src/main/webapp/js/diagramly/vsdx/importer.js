@@ -912,24 +912,27 @@ var com;
                                     return;
                                 } m.entries.push({ key: k, value: v, getKey: function () { return this.key; }, getValue: function () { return this.value; } }); })(this.vertexShapeMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, id), shape);
                             
-                            var lnkObj = shape.getHyperlink();
-                            
-                            if (lnkObj.pageLink)
+                            if (v1 != null)
                             {
-                                var pageId = lnkObj.pageLink;
+                                var lnkObj = shape.getHyperlink();
 
-                                if (!mxVsdxCodec.pageIdsSet[pageId] && mxVsdxCodec.pageTitleMap[pageId] != null)
+                                if (lnkObj.pageLink)
                                 {
-                                    pageId = mxVsdxCodec.pageTitleMap[pageId] + '';
-                                }
+                                    var pageId = lnkObj.pageLink;
 
-                                graph.setLinkForCell(v1, 'data:page/id,' + pageId.replace(/\s/g, '_'));
+                                    if (!mxVsdxCodec.pageIdsSet[pageId] && mxVsdxCodec.pageTitleMap[pageId] != null)
+                                    {
+                                        pageId = mxVsdxCodec.pageTitleMap[pageId] + '';
+                                    }
+
+                                    graph.setLinkForCell(v1, 'data:page/id,' + pageId.replace(/\s/g, '_'));
+                                }
+                                else if (lnkObj.extLink)
+                                {
+                                    graph.setLinkForCell(v1, lnkObj.extLink);
+                                }
                             }
-                            else if (lnkObj.extLink)
-                            {
-                                graph.setLinkForCell(v1, lnkObj.extLink);
-                            }
-                            
+
 							// Add Shape properties
 							var props = shape.getProperties();
 							
@@ -1011,6 +1014,53 @@ var com;
                         var textLabel = shape.noLabelGroup? null : shape.getTextLabel();
                         group = graph.insertVertex(parent, null, textLabel, Math.floor(Math.round(o.x * 100) / 100), Math.floor(Math.round(o.y * 100) / 100), Math.floor(Math.round(d.x * 100) / 100), Math.floor(Math.round(d.y * 100) / 100), style);
                     }
+                    // Visio containers and their sub-groups should not be connectable —
+                    // prevents container background shapes from interfering with
+                    // connector editing after import.
+                    // Check User.msvStructureType = "Container" on the master shape.
+                    // User section rows use N attribute: <Row N="msvStructureType">
+                    //   <Cell N="Value" V="Container"/></Row>
+                    var isContainer = false;
+
+                    if (shape.masterShape != null && shape.masterShape.sections != null &&
+                        shape.masterShape.sections["User"] != null)
+                    {
+                        var userElem = shape.masterShape.sections["User"].elem;
+                        var rows = com.mxgraph.io.vsdx.mxVsdxUtils.getDirectChildNamedElements(userElem, "Row");
+
+                        for (var ri = 0; ri < rows.length; ri++)
+                        {
+                            if (rows[ri].getAttribute("N") === "msvStructureType")
+                            {
+                                var cells = com.mxgraph.io.vsdx.mxVsdxUtils.getDirectChildNamedElements(rows[ri], "Cell");
+
+                                for (var ci = 0; ci < cells.length; ci++)
+                                {
+                                    if (cells[ci].getAttribute("N") === "Value")
+                                    {
+                                        isContainer = cells[ci].getAttribute("V") === "Container";
+                                        break;
+                                    }
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+
+                    var isParentNonConnectable = parent != null && parent.style != null &&
+                        parent.style.indexOf('connectable=0') >= 0;
+
+                    if (isContainer || isParentNonConnectable)
+                    {
+                        group.style = group.style.replace(/points=[^;]*/g, 'points=[]');
+
+                        if (group.style.indexOf('connectable=') < 0)
+                        {
+                            group.style += 'connectable=0;';
+                        }
+                    }
+
                     var potH = group.geometry.height;
                     var entries = (function (a) { var i = 0; return { next: function () { return i < a.length ? a[i++] : null; }, hasNext: function () { return i < a.length; } }; })(/* entrySet */ (function (m) { if (m.entries == null)
                         m.entries = []; return m.entries; })(children));
@@ -1112,6 +1162,27 @@ var com;
                     }
                     if (subLabel) {
                         shape.createLabelSubShape(graph, group);
+                    }
+                    // Propagate connectable=0 to all children of non-connectable
+                    // container groups (vertices, sublabels) so they cannot be
+                    // targeted by connectors either
+                    if (group.style != null && group.style.indexOf('connectable=0') >= 0 &&
+                        group.children != null)
+                    {
+                        for (var i = 0; i < group.children.length; i++)
+                        {
+                            var child = group.children[i];
+
+                            if (child.style != null && child.style.indexOf('connectable=') < 0)
+                            {
+                                child.style += 'connectable=0;';
+                            }
+
+                            if (child.style != null && child.style.indexOf('points=') >= 0)
+                            {
+                                child.style = child.style.replace(/points=[^;]*/g, 'points=[]');
+                            }
+                        }
                     }
                     var rotation = shape.getRotation();
                     if (rotation !== 0) {
@@ -12557,6 +12628,7 @@ var com;
                                 (styleMap["whiteSpace"] = "wrap");
                             /* remove */ delete styleMap["shape"];
                             /* remove */ delete styleMap["image"];
+                            /* remove */ delete styleMap["points"];
                             
                             if (this.isVerticalLabel())
                         	{
