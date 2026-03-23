@@ -2192,16 +2192,22 @@ EditorUi.prototype.createShapePicker = function(x, y, source, callback, directio
 			// Wrapper needed to catch events
 			var node = document.createElement('a');
 			div.appendChild(node);
-			
-			if (style != null && urlParams['sketch'] != '1')
+
+			var fixed = cell.shapePickerKeepStyle;
+			delete cell.shapePickerKeepStyle;
+
+			if (!fixed)
 			{
-				this.sidebar.graph.pasteStyle(style, [cell]);
-			}
-			else
-			{
-				this.sidebar.graph.pasteCellStyles([cell],
-					graph.currentVertexStyle,
-					graph.currentEdgeStyle);
+				if (style != null && urlParams['sketch'] != '1')
+				{
+					this.sidebar.graph.pasteStyle(style, [cell]);
+				}
+				else
+				{
+					this.sidebar.graph.pasteCellStyles([cell],
+						graph.currentVertexStyle,
+						graph.currentEdgeStyle);
+				}
 			}
 
 			var geo = cell.geometry;
@@ -2215,7 +2221,7 @@ EditorUi.prototype.createShapePicker = function(x, y, source, callback, directio
 			if (geo != null)
 			{
 				var temp = this.sidebar.createVertexTemplateFromCells([cell],
-					geo.width, geo.height, '', true, false, null, false,
+					geo.width, geo.height, '', true, false, null, true,
 					mxUtils.bind(this, function(evt)
 				{
 					if (!mxEvent.isAltDown(evt) || graph.getSelectionCount() != 1)
@@ -2323,6 +2329,11 @@ EditorUi.prototype.createShapePicker = function(x, y, source, callback, directio
 /**
  * Creates a temporary graph instance for rendering off-screen content.
  */
+EditorUi.prototype.defaultShapePickerEntries = null;
+
+/**
+ * Creates cells for the shape picker popup.
+ */
 EditorUi.prototype.getCellsForShapePicker = function(cell, hovering, showEdges)
 {
 	var graph = this.editor.graph;
@@ -2350,7 +2361,7 @@ EditorUi.prototype.getCellsForShapePicker = function(cell, hovering, showEdges)
 		try
 		{
 			cell = graph.cloneCell(cell);
-			
+
 			if (graph.model.isVertex(cell) && cell.geometry != null)
 			{
 				cell.geometry.x = 0;
@@ -2362,7 +2373,81 @@ EditorUi.prototype.getCellsForShapePicker = function(cell, hovering, showEdges)
 			cell = null;
 		}
 	}
-	
+
+	if (this.defaultShapePickerEntries != null)
+	{
+		var vertices = [];
+		var edges = [];
+
+		var createUserObject = function(value)
+		{
+			if (value != null && typeof value === 'object')
+			{
+				var doc = mxUtils.createXmlDocument();
+				var obj = doc.createElement('UserObject');
+
+				for (var key in value)
+				{
+					if (value.hasOwnProperty(key))
+					{
+						obj.setAttribute(key, value[key]);
+					}
+				}
+
+				if (obj.getAttribute('label') == null)
+				{
+					obj.setAttribute('label', '');
+				}
+
+				return obj;
+			}
+
+			return value;
+		};
+
+		for (var i = 0; i < this.defaultShapePickerEntries.length; i++)
+		{
+			var entry = this.defaultShapePickerEntries[i];
+
+			if (entry.style != null)
+			{
+				var value = createUserObject(entry.value);
+
+				if (entry.edge)
+				{
+					edges.push(createEdge(entry.style, entry.y, value));
+				}
+				else
+				{
+					var vertex = createVertex(entry.style, entry.width,
+						entry.height, value);
+
+					if (entry.keepStyle)
+					{
+						vertex.shapePickerKeepStyle = true;
+					}
+
+					vertices.push(vertex);
+				}
+			}
+		}
+
+		// Prepend cloned source cell or use first configured vertex entry
+		if (cell != null)
+		{
+			vertices[0] = cell;
+		}
+
+		var cells = vertices;
+
+		if (showEdges)
+		{
+			cells = cells.concat(edges);
+		}
+
+		return cells;
+	}
+
 	if (cell == null)
 	{
 		cell = createVertex(graph.appendFontSize(Editor.defaultTextStyle,
@@ -2385,7 +2470,7 @@ EditorUi.prototype.getCellsForShapePicker = function(cell, hovering, showEdges)
 		createVertex('shape=singleArrow;whiteSpace=wrap;html=1;arrowWidth=0.4;arrowSize=0.4;', 80, 60),
 		createVertex('shape=waypoint;sketch=0;size=6;pointerEvents=1;points=[];fillColor=none;resizable=0;' +
 			'rotatable=0;perimeter=centerPerimeter;snapToPoint=1;', 20, 20)];
-	
+
 	if (showEdges)
 	{
 		cells = cells.concat([
@@ -2570,6 +2655,16 @@ EditorUi.prototype.installTypingShim = function()
 	shim.setAttribute('autocorrect', 'off');
 	shim.setAttribute('autocapitalize', 'off');
 	shim.setAttribute('spellcheck', 'false');
+
+	// Suppress virtual keyboard on touch devices (Android/iOS tablets).
+	// The shim is for capturing keystrokes from physical keyboards and IME;
+	// on touch-only devices focusing a textarea triggers the soft keyboard.
+	if (mxClient.IS_ANDROID || mxClient.IS_IOS ||
+		('ontouchstart' in document.documentElement && navigator.maxTouchPoints > 1))
+	{
+		shim.setAttribute('inputmode', 'none');
+	}
+
 	shim.tabIndex = -1;
 	shim.className = 'mxTypingShim';
 	shim.style.cssText = 'position:absolute;overflow:hidden;resize:none;' +
@@ -6607,6 +6702,14 @@ EditorUi.prototype.createKeyHandler = function(editor)
 	var isEventIgnored = keyHandler.isEventIgnored;
 	keyHandler.isEventIgnored = function(evt)
 	{
+		// Ignores Ctrl+, (188) when not content editing to allow
+		// browser default (eg. Cmd+, for Chrome settings on macOS)
+		if (evt.keyCode == 188 && this.isControlDown(evt) &&
+			!this.graph.cellEditor.isContentEditing())
+		{
+			return true;
+		}
+
 		// Handles undo/redo/ctrl+./,/u via action and allows ctrl+b/i
 		// only if editing value is HTML (except for FF and Safari)
 		// 66, 73 are keycodes for editing actions like bold, italic,

@@ -2530,6 +2530,11 @@
 				Graph.selectParentLayer = config.selectParentLayer
 			}
 
+			if (config.intersectionSelect != null)
+			{
+				Graph.intersectionSelect = config.intersectionSelect
+			}
+
 			if (config.autosaveDelay != null)
 			{
 				DrawioFile.prototype.autosaveDelay = config.autosaveDelay
@@ -2747,6 +2752,12 @@
 			if (config.defaultEdgeStyle != null)
 			{
 				Graph.prototype.defaultEdgeStyle = config.defaultEdgeStyle;
+			}
+
+			// Overrides default shape picker entries
+			if (config.shapePicker != null)
+			{
+				EditorUi.prototype.defaultShapePickerEntries = config.shapePicker.shapes;
 			}
 
 			// Overrides default page visible
@@ -3853,10 +3864,10 @@
 								forceConvert) ? convertScale : 1;
 
 					        var canvas = document.createElement('canvas');
-					        var ctx = canvas.getContext('2d');
-							ctx.scale(convertScale, convertScale);
 					        canvas.height = img.height * convertScale;
 					        canvas.width = img.width * convertScale;
+					        var ctx = canvas.getContext('2d');
+							ctx.scale(convertScale, convertScale);
 					        ctx.drawImage(img, 0, 0);
 							
 				        	callback(canvas.toDataURL());

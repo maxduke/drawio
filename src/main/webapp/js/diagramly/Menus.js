@@ -784,8 +784,7 @@
 		action = editorUi.actions.addAction('copyAsImage', mxUtils.bind(this, function()
 		{
 			var cells = mxUtils.sortCells(graph.model.getTopmostCells(graph.getSelectionCells()));
-			var xml = mxUtils.getXml((cells.length == 0) ? editorUi.editor.getGraphXml() : graph.encodeCells(cells));
-			editorUi.copyImage(cells, xml);
+			editorUi.copyImage(cells);
 		}), null, null, Editor.ctrlKey + '+' + Editor.altKey + '+X');
 
 		action.visible = Editor.enableNativeClipboard && editorUi.editor.isExportToCanvas();
@@ -793,8 +792,7 @@
 		action = editorUi.actions.addAction('copyAsSvg', mxUtils.bind(this, function()
 		{
 			var cells = mxUtils.sortCells(graph.model.getTopmostCells(graph.getSelectionCells()));
-			var xml = mxUtils.getXml((cells.length == 0) ? editorUi.editor.getGraphXml() : graph.encodeCells(cells));
-			editorUi.copySvg(cells, xml);
+			editorUi.copySvg(cells);
 		}), null, null, Editor.ctrlKey + '+' + Editor.altKey + '+' + Editor.shiftKey + '+X');
 
 		action.visible = Editor.enableNativeClipboard && editorUi.editor.isExportToCanvas();

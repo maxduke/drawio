@@ -87,8 +87,16 @@ function mxSvgCanvas2D(root, styleEnabled)
 	this.fillPatterns = [];
 
 	/**
+	 * Variable: viewTranslate
+	 *
+	 * Optional view translate used to anchor fill patterns to diagram
+	 * coordinates. Set from the shape's view translate.
+	 */
+	this.viewTranslate = null;
+
+	/**
 	 * Variable: defs
-	 * 
+	 *
 	 * Reference to the defs section of the SVG document. Only for export.
 	 */
 	this.defs = null;
@@ -660,10 +668,10 @@ mxSvgCanvas2D.prototype.createSvgGradient = function(start, end, alpha1, alpha2,
  * 
  * Private helper function to create fillPattern Id
  */
-mxSvgCanvas2D.prototype.createFillPatternId = function(type, strokeSize, color)
+mxSvgCanvas2D.prototype.createFillPatternId = function(type, strokeSize, color, scale)
 {
 	// Removes illegal characters from gradient ID
-	return ('mx-pattern-' + type + '-' + strokeSize + '-' + color).
+	return ('mx-pattern-' + type + '-' + strokeSize + '-' + color + '-' + Math.round(scale * 100)).
 		toLowerCase().replace(/^[^a-z]+|[^\w:.-]+/gi, '_');
 };
 
@@ -675,9 +683,9 @@ mxSvgCanvas2D.prototype.createFillPatternId = function(type, strokeSize, color)
 mxSvgCanvas2D.prototype.getFillPattern = function(type, strokeSize, color, scale)
 {
 	color = this.getLightDarkColor(color);
-	var id = this.createFillPatternId(type, strokeSize, color.cssText);
+	var id = this.createFillPatternId(type, strokeSize, color.cssText, scale);
 	var fillPattern = this.fillPatterns[id];
-	
+
 	if (fillPattern == null)
 	{
 		var svg = this.root.ownerSVGElement;
@@ -688,7 +696,7 @@ mxSvgCanvas2D.prototype.getFillPattern = function(type, strokeSize, color, scale
 		if (svg != null)
 		{
 			fillPattern = svg.ownerDocument.getElementById(tmpId);
-			
+
 			while (fillPattern != null && fillPattern.ownerSVGElement != svg)
 			{
 				tmpId = id + '-' + counter++;
@@ -700,7 +708,7 @@ mxSvgCanvas2D.prototype.getFillPattern = function(type, strokeSize, color, scale
 			 // Uses shorter IDs for export
 			tmpId = 'id' + (++this.refCount);
 		}
-		
+
 		if (fillPattern == null)
 		{
 			switch(type)
@@ -724,9 +732,9 @@ mxSvgCanvas2D.prototype.getFillPattern = function(type, strokeSize, color, scale
 				default:
 					return null;
 			}
-			
+
 			fillPattern.setAttribute('id', tmpId);
-			
+
 			if (this.defs != null)
 			{
 				this.defs.appendChild(fillPattern);
@@ -740,22 +748,35 @@ mxSvgCanvas2D.prototype.getFillPattern = function(type, strokeSize, color, scale
 		this.fillPatterns[id] = fillPattern;
 	}
 
+	// Updates patternTransform to anchor pattern to diagram coordinates.
+	// The view translate is baked into shape SVG positions. By including
+	// it in the pattern transform, the pattern phase depends only on the
+	// shape's diagram position, not the view translate or zoom level.
+	var vt = this.viewTranslate;
+	var tx = (vt != null) ? this.format(vt.x * scale) : 0;
+	var ty = (vt != null) ? this.format(vt.y * scale) : 0;
+	var hasRotate = (type !== 'dots');
+
+	fillPattern.setAttribute('patternTransform',
+		'translate(' + tx + ',' + ty + ')' +
+		(hasRotate ? ' rotate(45)' : '') +
+		' scale(' + scale + ')');
+
 	return fillPattern.getAttribute('id');
 };
 
 mxSvgCanvas2D.prototype.createHatchPattern = function(strokeSize, color, scale)
 {
-	var sw = strokeSize * 1.5 * scale;
-	var size = this.format((10 + sw) * scale);
+	var baseSW = strokeSize * 1.5;
+	var size = this.format(10 + baseSW);
 
 	var fillPattern = this.createElement('pattern');
 	fillPattern.setAttribute('patternUnits', 'userSpaceOnUse');
 	fillPattern.setAttribute('width', size);
 	fillPattern.setAttribute('height', size);
 	fillPattern.setAttribute('x', '0');
-	fillPattern.setAttribute('y', '0');	 
-	fillPattern.setAttribute('patternTransform', 'rotate(45)');
-	
+	fillPattern.setAttribute('y', '0');
+
 	var line = this.createElement('line');
 	line.setAttribute('x1', '0');
 	line.setAttribute('y1', '0');
@@ -763,7 +784,7 @@ mxSvgCanvas2D.prototype.createHatchPattern = function(strokeSize, color, scale)
 	line.setAttribute('y2', size);
 	line.setAttribute('stroke', color.light); // TODO Is Gradient Color possible?
 	line.style.stroke = color.cssText;
-	line.setAttribute('stroke-width', sw);
+	line.setAttribute('stroke-width', baseSW);
 
 	fillPattern.appendChild(line);
 	return fillPattern;
@@ -771,17 +792,16 @@ mxSvgCanvas2D.prototype.createHatchPattern = function(strokeSize, color, scale)
 
 mxSvgCanvas2D.prototype.createDashedPattern = function(strokeSize, color, scale)
 {
-	var sw = strokeSize * 1.5 * scale;
-	var size = this.format((10 + sw) * scale);
+	var baseSW = strokeSize * 1.5;
+	var size = this.format(10 + baseSW);
 
 	var fillPattern = this.createElement('pattern');
 	fillPattern.setAttribute('patternUnits', 'userSpaceOnUse');
 	fillPattern.setAttribute('width', size);
 	fillPattern.setAttribute('height', size);
 	fillPattern.setAttribute('x', '0');
-	fillPattern.setAttribute('y', '0');	 
-	fillPattern.setAttribute('patternTransform', 'rotate(45)');
-	
+	fillPattern.setAttribute('y', '0');
+
 	var line = this.createElement('line');
 	line.setAttribute('x1', '0');
 	line.setAttribute('y1', size / 4);
@@ -789,31 +809,30 @@ mxSvgCanvas2D.prototype.createDashedPattern = function(strokeSize, color, scale)
 	line.setAttribute('y2', 3 * size / 4);
 	line.setAttribute('stroke', color.light); // TODO Is Gradient Color possible?
 	line.style.stroke = color.cssText;
-	line.setAttribute('stroke-width', sw);
-	
+	line.setAttribute('stroke-width', baseSW);
+
 	fillPattern.appendChild(line);
 	return fillPattern;
 };
 
 mxSvgCanvas2D.prototype.createZigZagLinePattern = function(strokeSize, color, scale)
 {
-	var sw = strokeSize * 1.5 * scale;
-	var size = this.format((10 + sw) * scale);
+	var baseSW = strokeSize * 1.5;
+	var size = this.format(10 + baseSW);
 
 	var fillPattern = this.createElement('pattern');
 	fillPattern.setAttribute('patternUnits', 'userSpaceOnUse');
 	fillPattern.setAttribute('width', size);
 	fillPattern.setAttribute('height', size);
 	fillPattern.setAttribute('x', '0');
-	fillPattern.setAttribute('y', '0');	 
-	fillPattern.setAttribute('patternTransform', 'rotate(45)');
-	
+	fillPattern.setAttribute('y', '0');
+
 	var path = this.createElement('path');
 	var s1_4 = size / 4, s3_4 = 3 * size / 4;
 	path.setAttribute('d', 'M ' + s1_4 + ' 0 L ' + s3_4 + ' 0 L ' + s1_4 + ' ' + size + ' L ' + s3_4 + ' ' + size);
 	path.setAttribute('stroke', color.light); // TODO Is Gradient Color possible?
 	path.style.stroke = color.cssText;
-	path.setAttribute('stroke-width', sw);
+	path.setAttribute('stroke-width', baseSW);
 	path.setAttribute('fill', 'none');
 
 	fillPattern.appendChild(path);
@@ -822,17 +841,16 @@ mxSvgCanvas2D.prototype.createZigZagLinePattern = function(strokeSize, color, sc
 
 mxSvgCanvas2D.prototype.createCrossHatchPattern = function(strokeSize, color, scale)
 {
-	var sw = strokeSize * 0.5 * scale;
-	var size = this.format(1.5 * (10 + sw) * scale);
+	var baseSW = strokeSize * 0.5;
+	var size = this.format(1.5 * (10 + baseSW));
 
 	var fillPattern = this.createElement('pattern');
 	fillPattern.setAttribute('patternUnits', 'userSpaceOnUse');
 	fillPattern.setAttribute('width', size);
 	fillPattern.setAttribute('height', size);
 	fillPattern.setAttribute('x', '0');
-	fillPattern.setAttribute('y', '0');	 
-	fillPattern.setAttribute('patternTransform', 'rotate(45)');
-	
+	fillPattern.setAttribute('y', '0');
+
 	var rect = this.createElement('rect');
 	rect.setAttribute('x', 0);
 	rect.setAttribute('y', 0);
@@ -840,24 +858,24 @@ mxSvgCanvas2D.prototype.createCrossHatchPattern = function(strokeSize, color, sc
 	rect.setAttribute('height', size);
 	rect.setAttribute('stroke', color.light); // TODO Is Gradient Color possible?
 	rect.style.stroke = color.cssText;
-	rect.setAttribute('stroke-width', sw);
+	rect.setAttribute('stroke-width', baseSW);
 	rect.setAttribute('fill', 'none');
-	
+
 	fillPattern.appendChild(rect);
 	return fillPattern;
 };
 
 mxSvgCanvas2D.prototype.createDotsPattern = function(strokeSize, color, scale)
 {
-	var size = this.format((10 + strokeSize) * scale);
+	var size = this.format(10 + strokeSize);
 
 	var fillPattern = this.createElement('pattern');
 	fillPattern.setAttribute('patternUnits', 'userSpaceOnUse');
 	fillPattern.setAttribute('width', size);
 	fillPattern.setAttribute('height', size);
 	fillPattern.setAttribute('x', '0');
-	fillPattern.setAttribute('y', '0');	 
-	
+	fillPattern.setAttribute('y', '0');
+
 	var circle = this.createElement('circle');
 	circle.setAttribute('cx', size / 2);
 	circle.setAttribute('cy', size / 2);
@@ -865,7 +883,7 @@ mxSvgCanvas2D.prototype.createDotsPattern = function(strokeSize, color, scale)
 	circle.setAttribute('stroke', 'none');
 	circle.setAttribute('fill', color.light); // TODO Is Gradient Color possible?
 	circle.style.fill = color.cssText;
-	
+
 	fillPattern.appendChild(circle);
 	return fillPattern;
 }; 
@@ -1069,8 +1087,10 @@ mxSvgCanvas2D.prototype.updateFill = function()
 		}
 	}
 
+	var baseStrokeWidth = Math.max(this.minStrokeWidth, Math.max(0.01,
+		this.format(s.strokeWidth)));
 	var pId = (s.fillStyle == null || s.fillStyle == 'auto' || s.fillStyle == 'solid') ? null :
-		this.getFillPattern(s.fillStyle, this.getCurrentStrokeWidth(), fill, s.scale);
+		this.getFillPattern(s.fillStyle, baseStrokeWidth, fill, s.scale);
 
 	if (isGradient || pId == null)
 	{

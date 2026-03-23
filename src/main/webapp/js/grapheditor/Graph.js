@@ -1216,7 +1216,8 @@ Graph = function(container, model, renderHint, stylesheet, themes, standalone)
 		// Changes rubberband selection ignore locked cells
 		this.selectRegion = function(rect, evt)
 		{
-			var isect = (mxEvent.isAltDown(evt)) ? rect : null;
+			var isect = (Graph.intersectionSelect ||
+				mxEvent.isAltDown(evt)) ? rect : null;
 			var cells = this.getCells(rect.x, rect.y,
 				rect.width, rect.height, null, null,
 				isect, null, true);
@@ -1432,6 +1433,13 @@ Graph.zoomWheel = false;
  * Default is false.
  */
 Graph.selectParentLayer = false;
+
+/**
+ * Specifies if intersection selection should be used for rubberband. Default is false.
+ * When true, cells that intersect the rubberband selection rectangle are selected,
+ * rather than requiring cells to be fully contained within the rectangle.
+ */
+Graph.intersectionSelect = false;
 
 /**
  * Minimum width for table columns.
@@ -8502,8 +8510,54 @@ InlineToolbar.prototype.updateIcons = function()
 };
 
 /**
+ * Returns true if the line segment from (x1,y1) to (x2,y2) intersects
+ * the axis-aligned rectangle at (rx, ry) with size (rw, rh).
+ * Uses the Liang-Barsky clipping algorithm.
+ */
+InlineToolbar.prototype.segmentIntersectsRect = function(x1, y1, x2, y2, rx, ry, rw, rh)
+{
+	var dx = x2 - x1;
+	var dy = y2 - y1;
+	var p = [-dx, dx, -dy, dy];
+	var q = [x1 - rx, rx + rw - x1, y1 - ry, ry + rh - y1];
+	var tMin = 0;
+	var tMax = 1;
+
+	for (var i = 0; i < 4; i++)
+	{
+		if (p[i] == 0)
+		{
+			if (q[i] < 0)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			var t = q[i] / p[i];
+
+			if (p[i] < 0)
+			{
+				tMin = Math.max(tMin, t);
+			}
+			else
+			{
+				tMax = Math.min(tMax, t);
+			}
+
+			if (tMin > tMax)
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
+};
+
+/**
  * Repositions the toolbar at the cell midpoint, avoiding overlap with
- * edge waypoint handles.
+ * edge waypoint handles and edge segments.
  */
 InlineToolbar.prototype.repaint = function()
 {
@@ -8553,6 +8607,25 @@ InlineToolbar.prototype.repaint = function()
 							}
 						}
 
+						// Check intersection with edge segments
+						var pts = state.absolutePoints;
+
+						if (pts != null)
+						{
+							for (var i = 1; i < pts.length; i++)
+							{
+								if (pts[i] != null && pts[i - 1] != null &&
+									this.segmentIntersectsRect(
+										pts[i - 1].x, pts[i - 1].y,
+										pts[i].x, pts[i].y,
+										bounds.x, bounds.y,
+										bounds.width, bounds.height))
+								{
+									return true;
+								}
+							}
+						}
+
 						return false;
 					});
 
@@ -8560,15 +8633,41 @@ InlineToolbar.prototype.repaint = function()
 					{
 						// Try below the edge midpoint instead
 						var belowY = mid.y + this.offset;
+						var found = false;
 
 						if (!checkOverlap(x, belowY))
 						{
 							y = belowY;
+							found = true;
 						}
-						else
+
+						// Try left/right of the edge midpoint
+						if (!found)
 						{
-							// Find nearest non-overlapping position by
-							// moving further away from the midpoint
+							var centerY = mid.y - toolbarHeight / 2;
+							var leftX = mid.x - toolbarWidth - this.offset;
+							var rightX = mid.x + this.offset;
+
+							if (!checkOverlap(leftX, centerY))
+							{
+								x = leftX;
+								y = centerY;
+								found = true;
+							}
+							else if (!checkOverlap(rightX, centerY))
+							{
+								x = rightX;
+								y = centerY;
+								found = true;
+							}
+						}
+
+						// Find nearest non-overlapping position by
+						// moving further away from the midpoint
+						if (!found)
+						{
+							var centerY = mid.y - toolbarHeight / 2;
+
 							for (var d = this.offset + minGap; d < 100; d += minGap)
 							{
 								if (!checkOverlap(x, mid.y - toolbarHeight - d))
@@ -8579,6 +8678,18 @@ InlineToolbar.prototype.repaint = function()
 								else if (!checkOverlap(x, mid.y + d))
 								{
 									y = mid.y + d;
+									break;
+								}
+								else if (!checkOverlap(mid.x - toolbarWidth - d, centerY))
+								{
+									x = mid.x - toolbarWidth - d;
+									y = centerY;
+									break;
+								}
+								else if (!checkOverlap(mid.x + d, centerY))
+								{
+									x = mid.x + d;
+									y = centerY;
 									break;
 								}
 							}
@@ -15490,27 +15601,29 @@ if (typeof mxVertexHandler !== 'undefined')
 						this.textarea.style.paddingTop = Math.round(spTop) + 'px';
 						this.textarea.style.paddingBottom = Math.round(spBottom) + 'px';
 
-						// Use flex layout for vertical alignment — this replaces
-						// the padding-top computation and works even before the
-						// textarea is appended to the DOM (unlike innerText-based
-						// measurement which returns empty for detached elements)
-						this.textarea.style.display = 'flex';
-						this.textarea.style.flexDirection = 'column';
+						// Use table-cell layout for vertical alignment.
+						// flex layout causes different word wrapping than the
+						// rendered text (which uses inline-block inside a flex
+						// container), so table-cell + vertical-align is used
+						// instead to match the rendered text wrapping exactly.
+						this.textarea.style.display = 'table-cell';
+						this.textarea.style.flexDirection = '';
+						this.textarea.style.justifyContent = '';
 
 						var valign = mxUtils.getValue(sty, mxConstants.STYLE_VERTICAL_ALIGN,
 							mxConstants.ALIGN_MIDDLE);
 
 						if (valign == mxConstants.ALIGN_MIDDLE)
 						{
-							this.textarea.style.justifyContent = 'center';
+							this.textarea.style.verticalAlign = 'middle';
 						}
 						else if (valign == mxConstants.ALIGN_BOTTOM)
 						{
-							this.textarea.style.justifyContent = 'flex-end';
+							this.textarea.style.verticalAlign = 'bottom';
 						}
 						else
 						{
-							this.textarea.style.justifyContent = 'flex-start';
+							this.textarea.style.verticalAlign = 'top';
 						}
 
 						// Recompute font size for current text content
@@ -15559,6 +15672,7 @@ if (typeof mxVertexHandler !== 'undefined')
 					this.textarea.style.display = '';
 					this.textarea.style.flexDirection = '';
 					this.textarea.style.justifyContent = '';
+					this.textarea.style.verticalAlign = '';
 					mxCellEditorResize.apply(this, arguments);
 				}
 			}

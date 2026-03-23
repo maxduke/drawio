@@ -123,6 +123,16 @@ GraphViewer.prototype.responsive = false;
 GraphViewer.prototype.darkMode = null;
 
 /**
+ * Specifies if link icons should be shown on shapes. Default is false.
+ */
+GraphViewer.prototype.showLinkIcons = false;
+
+/**
+ * Specifies if tooltip icons should be shown on shapes. Default is false.
+ */
+GraphViewer.prototype.showTooltipIcons = false;
+
+/**
  * Initializes the viewer.
  */
 GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
@@ -149,6 +159,10 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 		this.graphConfig['check-visible-state'] : this.checkVisibleState;
 	this.darkMode = (this.graphConfig['dark-mode'] != null) ?
 		this.graphConfig['dark-mode'] : this.darkMode;
+	this.showLinkIcons = (this.graphConfig['show-link-icons'] != null) ?
+		this.graphConfig['show-link-icons'] : this.showLinkIcons;
+	this.showTooltipIcons = (this.graphConfig['show-tooltip-icons'] != null) ?
+		this.graphConfig['show-tooltip-icons'] : this.showTooltipIcons;
 	this.toolbarItems = (this.graphConfig.toolbar != null) ?
 		this.graphConfig.toolbar.split(' ') : [];
 	this.zoomEnabled = mxUtils.indexOf(this.toolbarItems, 'zoom') >= 0;
@@ -274,6 +288,8 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 				this.graph.centerZoom = false;
 				this.graph.autoExtend = false;
 				this.graph.autoScroll = false;
+				this.graph.showLinkIcons = this.showLinkIcons;
+				this.graph.showTooltipIcons = this.showTooltipIcons;
 				this.graph.setEnabled(false);
 				
 				if (this.graphConfig['toolbar-nohide'] == true)

@@ -2481,21 +2481,58 @@
 					filename = basename + '.jpg';
 				}
 				
-				this.saveRequest(filename, format, mxUtils.bind(this, function(newTitle, base64)
+				if (urlParams['embed'] == '1' && urlParams['proto'] == 'json' && this.embedExportProtocol)
 				{
-					try
+					var parent = this.embedMessageSource || window.opener || window.parent;
+
+					if (this.spinner.spin(document.body, mxResources.get('exporting')))
 					{
-						var req = this.createDownloadRequest(newTitle, format, ignoreSelection, base64,
+						var req = this.createDownloadRequest(filename, format, ignoreSelection, '1',
 							transparent, currentPage, scale, border, grid, includeXml, pageRange, w, h,
 							!pageVisible, margin, fit, sheetsAcross, sheetsDown, shadows);
-						
-						return req;
+
+						req.send(mxUtils.bind(this, function(req)
+						{
+							this.spinner.stop();
+
+							if (req.getStatus() >= 200 && req.getStatus() <= 299)
+							{
+								var msg = this.createLoadMessage('export');
+								msg.format = format;
+								msg.filename = filename;
+								msg.data = 'data:application/pdf;base64,' + req.getText();
+								msg.xml = this.getFileData(true);
+								parent.postMessage(JSON.stringify(msg), '*');
+							}
+							else
+							{
+								this.handleError({message: mxResources.get('errorSavingFile')});
+							}
+						}), mxUtils.bind(this, function()
+						{
+							this.spinner.stop();
+							this.handleError({message: mxResources.get('errorSavingFile')});
+						}));
 					}
-					catch (e)
+				}
+				else
+				{
+					this.saveRequest(filename, format, mxUtils.bind(this, function(newTitle, base64)
 					{
-						this.handleError(e);
-					}
-				}));
+						try
+						{
+							var req = this.createDownloadRequest(newTitle, format, ignoreSelection, base64,
+								transparent, currentPage, scale, border, grid, includeXml, pageRange, w, h,
+								!pageVisible, margin, fit, sheetsAcross, sheetsDown, shadows);
+
+							return req;
+						}
+						catch (e)
+						{
+							this.handleError(e);
+						}
+					}));
+				}
 			}
 		}
 		catch (e)
@@ -5968,6 +6005,19 @@
 	 */
 	EditorUi.prototype.saveData = function(filename, format, data, mime, base64Encoded, defaultMode)
 	{
+		if (urlParams['embed'] == '1' && urlParams['proto'] == 'json' && this.embedExportProtocol)
+		{
+			var parent = this.embedMessageSource || window.opener || window.parent;
+			var msg = this.createLoadMessage('export');
+			msg.format = format;
+			msg.filename = filename;
+			msg.data = base64Encoded ? 'data:' + mime + ';base64,' + data : data;
+			msg.xml = this.getFileData(true);
+			parent.postMessage(JSON.stringify(msg), '*');
+
+			return;
+		}
+
 		if (this.isLocalFileSave())
 		{
 			this.saveLocalFile(data, filename, mime, base64Encoded, format, defaultMode);
@@ -8762,6 +8812,11 @@
 		for (var i = 0; i < pages.length; i++)
 		{
 			this.updatePageLinksForCell(mapping, pages[i].root);
+
+			if (pages[i] != this.currentPage)
+			{
+				pages[i].needsUpdate = true;
+			}
 
 			if (pages[i].viewState != null && this.updateBackgroundPageLink(
 				mapping, pages[i].viewState.backgroundImage))
@@ -12596,15 +12651,31 @@
 					
 				    if (files.length > 0)
 				    {
-						if (urlParams['embed'] != '1' && mxEvent.isShiftDown(evt))
-						{
-							// Closes current file if blank and no undoable changes
-							if (this.isBlankFile() && !this.canUndo() &&
-								this.getCurrentFile() != null)
-							{
-								this.fileLoaded(null);
-							}
+						var isBlankNoUndo = this.isBlankFile() && !this.canUndo();
+						var isDiagramFile = files.length == 1 && (EditorUi.isVisioFilename(files[0].name) ||
+							/(\.drawio)$/i.test(files[0].name) || /(\.xml)$/i.test(files[0].name));
 
+						if (urlParams['embed'] != '1' && isBlankNoUndo &&
+							(isDiagramFile || mxEvent.isShiftDown(evt)))
+						{
+							// Opens file in same window when dropped on blank file
+							// Uses noDialogs to prevent fileLoaded(null) from
+							// creating a new blank file asynchronously
+							this.fileLoaded(null, true);
+
+							// Marks file as changed after loading to trigger draft save
+							var fileLoadedListener = mxUtils.bind(this, function()
+							{
+								this.editor.removeListener(fileLoadedListener);
+								var file = this.getCurrentFile();
+
+								if (file != null)
+								{
+									file.fileChanged();
+								}
+							});
+
+							this.editor.addListener('fileLoaded', fileLoadedListener);
 							this.openFiles(files, true);
 						}
 						else
@@ -12614,7 +12685,7 @@
 								x = null;
 								y = null;
 							}
-							
+
 							this.importFiles(files, x, y, this.maxImageSize, null, null, null,
 								null, mxEvent.isControlDown(evt), null, null,
 								mxEvent.isShiftDown(evt), evt);
@@ -15606,7 +15677,7 @@
 	};
 
 	/**
-	 * Copies the given cells and XML to the clipboard as an embedded image.
+	 * Copies the given cells to the clipboard as an SVG image.
 	 */
 	EditorUi.prototype.copySvg = function(cells, xml, scale)
 	{
@@ -15618,7 +15689,12 @@
 				var svgRoot = graph.getSvg(null, scale, null, null, null, null,
 					null, null, null, null, null, null, null,
 					(cells.length > 0) ? cells : null);
-				svgRoot.setAttribute('content', xml);
+
+				if (xml != null)
+				{
+					svgRoot.setAttribute('content', xml);
+				}
+
 				var dataUrl = Editor.createSvgDataUri(mxUtils.getXml(svgRoot));
 				var w = parseInt(svgRoot.getAttribute('width'));
 				var h = parseInt(svgRoot.getAttribute('height'));
@@ -15637,7 +15713,7 @@
 	};
 
 	/**
-	 * Copies the given cells and XML to the clipboard as an embedded image.
+	 * Copies the given cells to the clipboard as a PNG image.
 	 */
 	EditorUi.prototype.copyImage = function(cells, xml, scale)
 	{
@@ -15656,11 +15732,11 @@
 						var dataUrl = this.createImageDataUri(canvas, xml, 'png');
 						var w = Math.round(parseInt(svgRoot.getAttribute('width')) / scale);
 						var h = Math.round(parseInt(svgRoot.getAttribute('height')) / scale);
-						
+
 						EditorUi.debug('EditorUi.copyImage', [this],
 							'cells', [cells], 'xml', [xml],
 							'scale', [scale]);
-						
+
 						this.writeImageToClipboard(dataUrl, w, h, 'image/png', null,
 							mxUtils.bind(this, function()
 							{
@@ -18074,6 +18150,7 @@
 		var ignoreChange = false;
 		var autosave = false;
 		var lastData = null;
+		var embedShadowPages = null;
 		
 		var updateStatus = mxUtils.bind(this, function(sender, eventObject)
 		{
@@ -18830,6 +18907,10 @@
 					{
 						convertToSketch = data.toSketch;
 						autosave = data.autosave == 1;
+						this.embedDiffSync = data.diffSync != null && data.diffSync !== false;
+						this.embedDiffSyncPatchOnly = (typeof data.diffSync === 'object' &&
+							data.diffSync != null && data.diffSync.patchOnly == true);
+						this.embedExportProtocol = data.exportProtocol == true;
 						var sourceMetadata = data.sourceMetadata || null;
 						this.hideDialog();
 						
@@ -19103,23 +19184,129 @@
 					else if (data.action == 'merge')
 					{
 						var file = this.getCurrentFile();
-						
+
 						if (file != null)
 						{
 							var tmp = extractDiagramXml(data.xml);
 
 							if (tmp != null && tmp != '')
 							{
-								file.mergeFile(new LocalFile(this, tmp), function()
+								file.mergeFile(new LocalFile(this, tmp), mxUtils.bind(this, function()
 								{
+									// Reset shadow after merge when diff sync is enabled
+									if (this.embedDiffSync)
+									{
+										embedShadowPages = this.clonePages(this.pages);
+										lastData = getData();
+									}
+
 									parent.postMessage(JSON.stringify({event: 'merge', message: data}), '*');
-								}, function(err)
+								}), function(err)
 								{
 									parent.postMessage(JSON.stringify({event: 'merge', message: data, error: err}), '*');
 								});
 							}
 						}
-						
+
+						return;
+					}
+					else if (data.action == 'patch')
+					{
+						var file = this.getCurrentFile();
+
+						if (file != null && data.patch != null)
+						{
+							try
+							{
+								ignoreChange = true;
+								file.patch([data.patch]);
+
+								// Update shadow to reflect the patched state
+								if (this.embedDiffSync && embedShadowPages != null)
+								{
+									embedShadowPages = this.applyPatches(
+										embedShadowPages, [data.patch]);
+								}
+
+								lastData = getData();
+								ignoreChange = false;
+
+								// Send acknowledgment with checksum
+								var resp = {event: 'patch', message: data};
+								var currentChecksum = this.getHashValueForPages(this.pages);
+								resp.checksum = currentChecksum;
+
+								if (data.checksum != null && data.checksum != currentChecksum)
+								{
+									resp.checksumMismatch = true;
+								}
+
+								parent.postMessage(JSON.stringify(resp), '*');
+							}
+							catch (e)
+							{
+								ignoreChange = false;
+								parent.postMessage(JSON.stringify({event: 'patch',
+									message: data, error: e.message || e.toString()}), '*');
+							}
+						}
+
+						return;
+					}
+					else if (data.action == 'getDiff')
+					{
+						var msg = {event: 'getDiff', message: data};
+
+						if (this.embedDiffSync && embedShadowPages != null)
+						{
+							var currentPages = this.clonePages(this.pages);
+							msg.patch = this.diffPages(embedShadowPages, currentPages);
+							msg.checksum = this.getHashValueForPages(currentPages);
+						}
+						else
+						{
+							msg.xml = getData();
+						}
+
+						parent.postMessage(JSON.stringify(msg), '*');
+
+						return;
+					}
+					else if (data.action == 'resetDiff')
+					{
+						if (this.embedDiffSync)
+						{
+							if (data.xml != null)
+							{
+								var tmp = extractDiagramXml(data.xml);
+								var file = this.getCurrentFile();
+
+								if (tmp != null && tmp != '' && file != null)
+								{
+									file.mergeFile(new LocalFile(this, tmp), mxUtils.bind(this, function()
+									{
+										embedShadowPages = this.clonePages(this.pages);
+										lastData = getData();
+										parent.postMessage(JSON.stringify({event: 'resetDiff',
+											message: data, checksum: this.getHashValueForPages(
+											this.pages)}), '*');
+									}), function(err)
+									{
+										parent.postMessage(JSON.stringify({event: 'resetDiff',
+											message: data, error: err}), '*');
+									});
+								}
+							}
+							else
+							{
+								embedShadowPages = this.clonePages(this.pages);
+								lastData = getData();
+								parent.postMessage(JSON.stringify({event: 'resetDiff',
+									message: data, checksum: this.getHashValueForPages(
+									this.pages)}), '*');
+							}
+						}
+
 						return;
 					}
 					else if (data.action == 'remoteInvokeReady') 
@@ -19178,21 +19365,55 @@
 
 				lastData = getData();
 
+				// Initialize shadow pages for diff-based sync
+				if (this.embedDiffSync)
+				{
+					embedShadowPages = this.clonePages(this.pages);
+				}
+
 				if (autosave && changeListener == null)
 				{
 					changeListener = mxUtils.bind(this, function(sender, eventObject)
 					{
 						var data = getData();
-						
+
 						if (data != lastData && !ignoreChange)
 						{
 							var msg = this.createLoadMessage('autosave');
-							msg.xml = data;
 							msg.message = message;
+
+							if (this.embedDiffSync && embedShadowPages != null)
+							{
+								var currentPages = this.clonePages(this.pages);
+								var patch = this.diffPages(embedShadowPages, currentPages);
+
+								if (!mxUtils.isEmptyObject(patch))
+								{
+									msg.patch = patch;
+									msg.checksum = this.getHashValueForPages(currentPages);
+
+									if (!this.embedDiffSyncPatchOnly)
+									{
+										msg.xml = data;
+									}
+								}
+								else
+								{
+									// No structural changes but data changed
+									msg.xml = data;
+								}
+
+								embedShadowPages = currentPages;
+							}
+							else
+							{
+								msg.xml = data;
+							}
+
 							var parent = this.embedMessageSource || window.opener || window.parent;
 							parent.postMessage(JSON.stringify(msg), '*');
 						}
-						
+
 						lastData = data;
 					});
 					
@@ -19227,6 +19448,12 @@
 
 					// Attaches XML to response
 					resp.xml = data;
+
+					// Include checksum when diff sync is enabled
+					if (this.embedDiffSync && this.pages != null)
+					{
+						resp.checksum = this.getHashValueForPages(this.pages);
+					}
 
 					parent.postMessage(JSON.stringify(resp), '*');
 				}

@@ -1,3 +1,23 @@
+23-MAR-2026: 29.6.5
+
+- Corrects dashboard path
+- Avoid InlineToolbar overlapping edge segments
+- Remove embedded XML from images copied to clipboard
+- Add showLinkIcons and showTooltipIcons support to GraphViewer
+- Fix word wrapping mismatch in autosizeText in-place editor
+- Fix MathJax path in embed dev mode
+- Fix fill patterns to scale correctly with diagram zoom level
+- Fix touch input on Android tablets using Chrome desktop site mode
+- Fixes wrong SVG scaling in desktop PNG export [drawio-desktop#1954]
+- Adds intersectionSelect configuration switch [drawio#5508]
+- Fixes undo for initial fill style change (eg. from auto to hatch)
+- Fixes Cmd+, for Chrome settings on macOS
+- Fixes fill pattern offset shifting on zoom and window resize
+- Add exportProtocol and diffSync options to JSON embed protocol
+- Adds configurable shape picker via Editor.configure() [jgraph/drawio#1812,jgraph/drawio#1197,jgraph/drawio#4130,jgraph/drawio#3783]
+- Marks imported files with updates page links as dirty [DID-17660]
+- Opens draw.io/VSDX files in same window when dropped on blank file
+
 18-MAR-2026: 29.6.4
 
 - Tidies changelog

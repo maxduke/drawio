@@ -648,6 +648,15 @@ App.main = function(callback, createUi)
 		Editor.loadCompatibleCss();
 		
 		App.isMainCalled = true;
+
+		// Allows forcing Android detection via URL parameter for
+		// tablets using Chrome's "Request Desktop Site" mode where
+		// the user agent no longer contains "Android"
+		if (urlParams['android'] == '1')
+		{
+			mxClient.IS_ANDROID = true;
+		}
+
 		// Handles uncaught errors before the app is loaded
 		window.onerror = function(message, url, linenumber, colno, err)
 		{
