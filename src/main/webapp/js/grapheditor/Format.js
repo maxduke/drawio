@@ -930,7 +930,7 @@ BaseFormatPanel.prototype.createColorOption = function(label, getColorFn, setCol
 	};
 
 	// Adds native color dialog
-	if (!mxClient.IS_IE && !mxClient.IS_IE11 && !mxClient.IS_TOUCH)
+	if (!mxClient.IS_TOUCH)
 	{
 		dropper = document.createElement('img');
 		dropper.src = Editor.colorDropperImage;
@@ -3671,8 +3671,8 @@ TextFormatPanel.prototype.addFont = function(container)
 		// Disables option if any selected cell's label contains HTML elements
 		// that are not supported by the HTML-to-SVG conversion in mxSvgCanvas2D
 		var supportedTags = {'H1': 1, 'H2': 1, 'H3': 1, 'H4': 1, 'H5': 1, 'H6': 1,
-			'P': 1, 'PRE': 1, 'BLOCKQUOTE': 1, 'SUP': 1, 'SUB': 1,
-			'B': 1, 'I': 1, 'SPAN': 1, 'FONT': 1, 'STRIKE': 1, 'U': 1};
+			'P': 1, 'PRE': 1, 'BLOCKQUOTE': 1, 'DIV': 1, 'SUP': 1, 'SUB': 1,
+			'B': 1, 'I': 1, 'SPAN': 1, 'FONT': 1, 'STRIKE': 1, 'U': 1, 'BR': 1};
 		var hasUnsupported = false;
 		var cells = graph.getSelectionCells();
 
@@ -3704,8 +3704,8 @@ TextFormatPanel.prototype.addFont = function(container)
 			convertToSvg.getElementsByTagName('input')[0].setAttribute('disabled', 'disabled');
 			convertToSvg.setAttribute('title',
 				'Label contains unsupported HTML for SVG conversion. ' +
-				'Supported: H1-H6, P, PRE, BLOCKQUOTE, B, I, U, STRIKE, ' +
-				'SUP, SUB, SPAN, FONT (without background color).');
+				'Supported: H1-H6, P, PRE, BLOCKQUOTE, DIV, B, I, U, STRIKE, ' +
+				'SUP, SUB, SPAN, FONT, BR (without background color).');
 		}
 	}
 

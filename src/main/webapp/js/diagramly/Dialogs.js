@@ -8601,19 +8601,20 @@ var ChatWindow = function(editorUi, x, y, w, h)
 	var createOption = document.createElement('option');
 	var helpOption = document.createElement('option');
 
-	if (typeof mxMermaidToDrawio !== 'undefined' && window.isMermaidEnabled &&
+	if (editorUi.isExternalDataComms() &&
+		typeof mxMermaidToDrawio !== 'undefined' && window.isMermaidEnabled &&
 		mxUtils.indexOf(Editor.aiActions, 'createPublic') >= 0)
 	{
 		createPublicOption.setAttribute('value', 'createPublic');
 		mxUtils.write(createPublicOption, mxResources.get('createDiagram') +
 			' (' + mxResources.get('draw.io') + ')');
 		typeSelect.appendChild(createPublicOption);
-	}
 
-	var divider1 = document.createElement('option');
-	divider1.setAttribute('disabled', 'disabled');
-	mxUtils.write(divider1, '\u2500\u2500\u2500\u2500\u2500\u2500');
-	typeSelect.appendChild(divider1);
+		var divider1 = document.createElement('option');
+		divider1.setAttribute('disabled', 'disabled');
+		mxUtils.write(divider1, '\u2500\u2500\u2500\u2500\u2500\u2500');
+		typeSelect.appendChild(divider1);
+	}
 
 	var copyDrawingOption = document.createElement('option');
 	copyDrawingOption.setAttribute('value', 'copyOfDrawing');
@@ -8743,6 +8744,19 @@ var ChatWindow = function(editorUi, x, y, w, h)
 	}
 
 	user.appendChild(options);
+
+	// Clipboard-only mode: no AI options available
+	var clipboardOnly = publicChat && createPublicOption.parentNode == null;
+
+	if (clipboardOnly)
+	{
+		inner.style.display = 'none';
+
+		var selectOption = document.createElement('option');
+		selectOption.setAttribute('value', 'select');
+		mxUtils.write(selectOption, mxResources.get('select') + '...');
+		typeSelect.insertBefore(selectOption, typeSelect.firstChild);
+	}
 
 	if (typeSelect.children.length > 0)
 	{
@@ -12729,10 +12743,11 @@ var CustomDialog = function(editorUi, content, okFn, cancelFn, okButtonText, hel
 		marginTop)
 {
 	var div = document.createElement('div');
+	div.style.paddingBottom = '10px';
 	div.appendChild(content);
-	
+
 	var btns = document.createElement('div');
-	btns.style.marginTop = (marginTop != null) ? marginTop : '30px';
+	btns.style.marginTop = (marginTop != null) ? marginTop : '34px';
 	btns.style.textAlign = 'right';
 	
 	if (buttonsContent != null)
@@ -12948,20 +12963,41 @@ var FontDialog = function(editorUi, curFontname, curUrl, curType, fn)
 	row.appendChild(td);
 	
 	var sysFontInput = document.createElement('input');
-	
+
 	if (curType == 's')
 	{
 		sysFontInput.setAttribute('value', curFontname);
 	}
-	
+
 	sysFontInput.style.marginLeft = '4px';
 	sysFontInput.style.width = '250px';
 	sysFontInput.className = 'dlg_fontName_s';
-	
+
+	if (Editor.localFonts != null)
+	{
+		var datalist = document.createElement('datalist');
+		datalist.id = 'fontdialog-localfonts';
+
+		for (var i = 0; i < Editor.localFonts.length; i++)
+		{
+			var option = document.createElement('option');
+			option.value = Editor.localFonts[i];
+			datalist.appendChild(option);
+		}
+
+		sysFontInput.setAttribute('list', 'fontdialog-localfonts');
+	}
+
 	td = document.createElement('td');
 	td.appendChild(sysFontInput);
+
+	if (datalist != null)
+	{
+		td.appendChild(datalist);
+	}
+
 	row.appendChild(td);
-	
+
 	tbody.appendChild(row);
 
 	//Google fonts section

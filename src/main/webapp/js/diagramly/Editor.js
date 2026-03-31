@@ -221,6 +221,16 @@
 	Editor.enableWebFonts = !window.mxIsElectron;
 
 	/**
+	 * Specifies if local font scanning is enabled.
+	 */
+	Editor.enableLocalFonts = false;
+
+	/**
+	 * Holds the list of detected local font names.
+	 */
+	Editor.localFonts = null;
+
+	/**
 	 * Disables the shadow option in the format panel.
 	 */
 	Editor.enableShadowOption = !mxClient.IS_SF;
@@ -862,6 +872,8 @@
     			mxUtils.getValue(state.style, 'childLayout', null) == null;
         }},
         {name: 'expand', dispName: 'Expand', type: 'bool', defVal: true},
+		{name: 'contract', dispName: 'Contract', type: 'bool', defVal: false},
+		{name: 'groupPadding', dispName: 'Group Padding', type: 'int', defVal: 0, min: 0},
         {name: 'part', dispName: 'Part', type: 'bool', defVal: false, isVisible: function(state, format)
         {
         	var model = format.editorUi.editor.graph.model;
@@ -2501,6 +2513,11 @@
 				document.head.appendChild(style);
 			}
 			
+			if (config.enableLocalFonts != null)
+			{
+				Editor.enableLocalFonts = config.enableLocalFonts;
+			}
+
 			if (config.defaultFonts != null)
 			{
 				Menus.prototype.defaultFonts = config.defaultFonts
@@ -2568,6 +2585,11 @@
 				Editor.globalVars = config.globalVars;
 			}
 
+			if (config.defaultFileType != null)
+			{
+				Editor.defaultFileType = config.defaultFileType;
+			}
+
 			if (config.compressXml != null)
 			{
 				Editor.defaultCompressed = config.compressXml;
@@ -2582,6 +2604,11 @@
 			if (config.simpleLabels != null)
 			{
 				Editor.simpleLabels = config.simpleLabels;
+			}
+
+			if (config.optimizeHtmlLabels != null)
+			{
+				Editor.optimizeHtmlLabels = config.optimizeHtmlLabels;
 			}
 
 			if (config.pasteAtMousePointer != null)
@@ -3617,9 +3644,9 @@
 	Editor.prototype.editButtonLink = (urlParams['edit'] != null) ? decodeURIComponent(urlParams['edit']) : null;
 
 	/**
-	 * Specifies if img.crossOrigin is supported. This is true for all browsers except IE10 and earlier.
+	 * Specifies if img.crossOrigin is supported.
 	 */
-	Editor.prototype.crossOriginImages = !mxClient.IS_IE;
+	Editor.prototype.crossOriginImages = true;
 	
 	/**
 	 * Adds support for old stylesheets and compressed files
@@ -3892,6 +3919,15 @@
 			
 			Editor.doMathJaxRender = function(container)
 			{
+				// Disables automatic line breaking for inline math to
+				// avoid unwanted breaks in narrow label containers
+				if (MathJax.startup != null && MathJax.startup.output != null &&
+					MathJax.startup.output.options != null &&
+					MathJax.startup.output.options.linebreaks != null)
+				{
+					MathJax.startup.output.options.linebreaks.inline = false;
+				}
+
 				try
 				{
 					if (rendering == null)
@@ -3956,9 +3992,9 @@
 				{
 					pageReady: function()
 					{
-						for (var i = 0; i < Editor.mathJaxQueue.length; i++)	
-						{	
-							Editor.doMathJaxRender(Editor.mathJaxQueue[i]);	
+						for (var i = 0; i < Editor.mathJaxQueue.length; i++)
+						{
+							Editor.doMathJaxRender(Editor.mathJaxQueue[i]);
 						}
 					}
 				}
@@ -5817,8 +5853,15 @@
 			{name: 'swimlaneBody', dispName: 'Body Border', type: 'bool', defVal: true},
 	        {name: 'horizontal', dispName: 'Horizontal', type: 'bool', defVal: true},
 	        {name: 'separatorColor', dispName: 'Separator Color', type: 'color', defVal: null},
+	        {name: 'fixedHeader', dispName: 'Fixed Header', type: 'bool', defVal: true,
+				getDefaultValue: function(state, format)
+				{
+					var shape = mxCellRenderer.defaultShapes[mxUtils.getValue(state.style, 'shape', '')];
+					return (shape != null && shape.prototype.fixedHeaderDefault != null) ?
+						(shape.prototype.fixedHeaderDefault ? '1' : '0') : '1';
+				}},
 	    ];
-		
+
 		mxCellRenderer.defaultShapes['table'].prototype.customProperties = [
 			{name: 'rowLines', dispName: 'Row Lines', type: 'bool', defVal: true},
 			{name: 'columnLines', dispName: 'Column Lines', type: 'bool', defVal: true},
@@ -9444,11 +9487,12 @@
 	{
 		var graph = editorUi.editor.graph;
 		var div = document.createElement('div');
-		
+
 		var title = document.createElement('h3');
 		title.style.width = '100%';
 		title.style.textAlign = 'center';
 		title.style.marginTop = '0px';
+		title.style.marginBottom = '10px';
 		mxUtils.write(title, titleText || mxResources.get('print'));
 		div.appendChild(title);
 
@@ -9457,52 +9501,58 @@
 
 		// Pages
 		var pagesSection = document.createElement('div');
+		pagesSection.className = 'geDialogSection';
 		pagesSection.style.whiteSpace = 'nowrap';
-		
+
 		var allPagesRadio = document.createElement('input');
 		allPagesRadio.style.marginRight = '8px';
-		allPagesRadio.style.marginBottom = '8px';
 		allPagesRadio.setAttribute('type', 'radio');
 		allPagesRadio.setAttribute('name', 'pages-printdialog');
-		
-		pagesSection.appendChild(allPagesRadio);
 
+		var allPagesRow = document.createElement('div');
+		allPagesRow.className = 'geDialogCheckRow';
+		allPagesRow.appendChild(allPagesRadio);
 		var span = document.createElement('span');
 		mxUtils.write(span, mxResources.get('allPages'));
 		mxEvent.addListener(span, 'click', function()
 		{
 			allPagesRadio.checked = true;
 		});
-		pagesSection.appendChild(span);
-
-		mxUtils.br(pagesSection);
+		allPagesRow.appendChild(span);
+		pagesSection.appendChild(allPagesRow);
 
 		// Page range
-		var pagesRadio = allPagesRadio.cloneNode(true);
-		pagesSection.appendChild(pagesRadio);
-		
+		var pagesRadio = document.createElement('input');
+		pagesRadio.style.marginRight = '8px';
+		pagesRadio.setAttribute('type', 'radio');
+		pagesRadio.setAttribute('name', 'pages-printdialog');
+
+		var pagesRow = document.createElement('div');
+		pagesRow.className = 'geDialogCheckRow';
+		pagesRow.appendChild(pagesRadio);
+
 		var span = document.createElement('span');
 		mxUtils.write(span, mxResources.get('pages') + ':');
-		pagesSection.appendChild(span);
+		pagesRow.appendChild(span);
 		mxEvent.addListener(span, 'click', function()
 		{
 			pagesRadio.checked = true;
 		});
-		
+
 		var pagesFromInput = document.createElement('input');
 		pagesFromInput.style.margin = '0 4px';
 		pagesFromInput.setAttribute('value', '1');
 		pagesFromInput.setAttribute('type', 'number');
 		pagesFromInput.setAttribute('min', '1');
 		pagesFromInput.style.width = '40px';
-		pagesSection.appendChild(pagesFromInput);
-		
+		pagesRow.appendChild(pagesFromInput);
+
 		var span = document.createElement('span');
 		mxUtils.write(span, mxResources.get('to'));
-		pagesSection.appendChild(span);
-		
+		pagesRow.appendChild(span);
+
 		var pagesToInput = pagesFromInput.cloneNode(true);
-		pagesSection.appendChild(pagesToInput);
+		pagesRow.appendChild(pagesToInput);
 
 		mxEvent.addListener(pagesFromInput, 'focus', function()
 		{
@@ -9573,7 +9623,8 @@
 		currPage.style.textOverflow = 'ellipsis';
 		currPage.style.whiteSpace = 'nowrap';
 
-		pagesSection.appendChild(currPage);
+		pagesRow.appendChild(currPage);
+		pagesSection.appendChild(pagesRow);
 		
 		if (pageCount > 1)
 		{
@@ -9582,16 +9633,13 @@
 		
 		// Selection only
 		var selectionSection = document.createElement('div');
-		selectionSection.style.borderBottom = '1px solid lightGray';
-		selectionSection.style.paddingBottom = '12px';
-		selectionSection.style.marginBottom = '12px';
-		selectionSection.style.whiteSpace = 'nowrap';
+		selectionSection.className = 'geDialogCheckRow';
 
 		var selectionOnlyRadio = document.createElement('input');
 		selectionOnlyRadio.setAttribute('name', 'pages-printdialog');
 		selectionOnlyRadio.setAttribute('type', (pageCount == 1) ? 'checkbox' : 'radio');
 		selectionOnlyRadio.style.marginRight = '8px';
-		
+
 		if (graph.isSelectionEmpty())
 		{
 			selectionOnlyRadio.setAttribute('disabled', 'disabled');
@@ -9600,15 +9648,15 @@
 		if (graph.isEnabled())
 		{
 			selectionSection.appendChild(selectionOnlyRadio);
-		
+
 			var span = document.createElement('span');
 			mxUtils.write(span, mxResources.get('selectionOnly'));
 			selectionSection.appendChild(span);
 		}
 
-		if (graph.isEnabled() || pageCount > 1)
+		if (graph.isEnabled())
 		{
-			div.appendChild(selectionSection);
+			pagesSection.appendChild(selectionSection);
 		}
 
 		if (!editorUi.isPagesEnabled() || editorUi.lastPrintPagesRadioChecked)
@@ -9632,12 +9680,15 @@
 			});
 		}
 		
+		// --- Size section ---
+		var sizeSection = document.createElement('div');
+		sizeSection.className = 'geDialogSection';
+
 		// Page view
 		var pageViewSection = document.createElement('div');
-		pageViewSection.style.whiteSpace = 'nowrap';
+		pageViewSection.className = 'geDialogCheckRow';
 
 		var pageViewRadio = document.createElement('input');
-		pageViewRadio.style.marginBottom = '8px';
 		pageViewRadio.style.marginRight = '8px';
 		pageViewRadio.setAttribute('type', 'radio');
 		pageViewRadio.setAttribute('name', 'printSize');
@@ -9651,14 +9702,13 @@
 			pageViewRadio.checked = true;
 		});
 
-		div.appendChild(pageViewSection);
-		
+		sizeSection.appendChild(pageViewSection);
+
 		// Crop
 		var cropSection = document.createElement('div');
-		cropSection.style.whiteSpace = 'nowrap';
+		cropSection.className = 'geDialogCheckRow';
 
 		var cropRadio = document.createElement('input');
-		cropRadio.style.marginBottom = '8px';
 		cropRadio.style.marginRight = '8px';
 		cropRadio.setAttribute('type', 'radio');
 		cropRadio.setAttribute('name', 'printSize');
@@ -9672,24 +9722,18 @@
 			cropRadio.checked = true;
 		});
 
-		div.appendChild(cropSection);
+		sizeSection.appendChild(cropSection);
 
 		// Fit to ...
 		var fitSection = document.createElement('div');
-		fitSection.style.whiteSpace = 'nowrap';
+		fitSection.className = 'geDialogCheckRow';
+		fitSection.style.alignItems = 'flex-start';
 
 		var fitRadio = document.createElement('input');
-		fitRadio.style.marginBottom = '8px';
-		fitRadio.style.marginRight = '8px';
+		fitRadio.style.marginTop = '4px';
 		fitRadio.setAttribute('type', 'radio');
 		fitRadio.setAttribute('name', 'printSize');
-		
-		var spanFitRadio = document.createElement('div');
-		spanFitRadio.style.display = 'inline-block';
-		spanFitRadio.style.verticalAlign = 'top';
-		spanFitRadio.style.paddingTop = '2px';
-		spanFitRadio.appendChild(fitRadio);
-		fitSection.appendChild(spanFitRadio);
+		fitSection.appendChild(fitRadio);
 		
 		var table = document.createElement('table');
 		table.style.display = 'inline-block';
@@ -9780,73 +9824,80 @@
 		table.appendChild(tbody);
 		fitSection.appendChild(table);
 		
-		div.appendChild(fitSection);
+		sizeSection.appendChild(fitSection);
+		div.appendChild(sizeSection);
 
 		// Border and zoom
 		var optionsSection = document.createElement('div');
-		optionsSection.style.borderTop = '1px solid lightGray';
-		optionsSection.style.whiteSpace = 'nowrap';
-		optionsSection.style.paddingTop = '12px';
-		optionsSection.style.marginTop = '12px';
-		optionsSection.style.paddingLeft = '8px';
-		
-		mxUtils.write(optionsSection, mxResources.get('borderWidth') + ':');
+		optionsSection.className = 'geDialogSection';
+
+		var borderZoomRow = document.createElement('div');
+		borderZoomRow.className = 'geDialogFormRow';
+
+		var borderLabel = document.createElement('label');
+		borderLabel.className = 'geDialogFormLabel';
+		mxUtils.write(borderLabel, mxResources.get('borderWidth'));
+		borderZoomRow.appendChild(borderLabel);
+
 		var borderInput = document.createElement('input');
 		borderInput.setAttribute('type', 'number');
 		borderInput.setAttribute('min', '0');
 		borderInput.style.width = '40px';
-		borderInput.style.marginLeft = '4px';
 		borderInput.value = (editorUi.lastPrintBorder != null) ?
 			editorUi.lastPrintBorder : mxPrintPreview.prototype.pageMargin;
-		optionsSection.appendChild(borderInput);
+		borderZoomRow.appendChild(borderInput);
 
-		var span = document.createElement('span');
-		span.style.marginLeft = '8px';
-		mxUtils.write(span, mxResources.get('zoom') + ':');
-		optionsSection.appendChild(span);
-		
+		var zoomLabel = document.createElement('label');
+		zoomLabel.style.marginLeft = '12px';
+		zoomLabel.style.marginRight = '4px';
+		mxUtils.write(zoomLabel, mxResources.get('zoom'));
+		borderZoomRow.appendChild(zoomLabel);
+
 		var zoomInput = document.createElement('input');
 		zoomInput.style.width = '60px';
-		zoomInput.style.marginLeft = '4px';
 		zoomInput.value = (editorUi.lastPrintZoom != null) ?
 			editorUi.lastPrintZoom : '100%';
-		optionsSection.appendChild(zoomInput);
+		borderZoomRow.appendChild(zoomInput);
 
-		mxUtils.br(optionsSection);
+		optionsSection.appendChild(borderZoomRow);
 
 		// Grid
+		var gridRow = document.createElement('div');
+		gridRow.className = 'geDialogCheckRow';
+
 		var gridInput = document.createElement('input');
 		gridInput.setAttribute('type', 'checkbox');
-		gridInput.style.marginTop = '12px';
+		gridInput.style.marginRight = '8px';
 		gridInput.checked = (editorUi.lastPrintGrid != null) ?
 			editorUi.lastPrintGrid : false;
-		optionsSection.appendChild(gridInput);
+		gridRow.appendChild(gridInput);
 
 		var span = document.createElement('span');
-		span.style.marginLeft = '4px';
-		span.style.marginRight = '8px';
 		mxUtils.write(span, mxResources.get('grid'));
-		optionsSection.appendChild(span);
+		gridRow.appendChild(span);
 
 		mxEvent.addListener(span, 'click', function(e)
 		{
 			gridInput.checked = true;
 			mxEvent.consume(e);
 		});
-		
+
+		optionsSection.appendChild(gridRow);
+
 		// Shadows enabled
+		var shadowsRow = document.createElement('div');
+		shadowsRow.className = 'geDialogCheckRow';
+
 		var shadowsInput = document.createElement('input');
 		shadowsInput.setAttribute('type', 'checkbox');
-		shadowsInput.style.marginTop = '12px';
+		shadowsInput.style.marginRight = '8px';
 		shadowsInput.checked = (editorUi.lastPrintShadow != null) ?
 			editorUi.lastPrintShadow : false;
-		optionsSection.appendChild(shadowsInput);
+		shadowsRow.appendChild(shadowsInput);
 
 		var span = document.createElement('span');
-		span.style.marginLeft = '4px';
-		span.style.marginRight = '8px';
 		mxUtils.write(span, mxResources.get('shadows'));
-		optionsSection.appendChild(span);
+		shadowsRow.appendChild(span);
 
 		if (!editorUi.isOffline() || mxClient.IS_CHROMEAPP)
 		{
@@ -9866,61 +9917,63 @@
 		// Hides shadows option if not supported
 		if (!Editor.enableShadowOption)
 		{
-			shadowsInput.style.display = 'none';
-			span.style.display = 'none';
+			shadowsRow.style.display = 'none';
 		}
-		else if (fn != null)
-		{
-			mxUtils.br(optionsSection);
-		}
+
+		optionsSection.appendChild(shadowsRow);
 
 		// Transparent background
 		var transparentInput = document.createElement('input');
 		transparentInput.setAttribute('type', 'checkbox');
-		transparentInput.style.marginTop = '10px';
+		transparentInput.style.marginRight = '8px';
 		transparentInput.checked = (editorUi.lastPrintTransparent != null) ?
 			editorUi.lastPrintTransparent : false;
 
 		// Export
 		if (fn != null)
 		{
-			optionsSection.appendChild(transparentInput);
+			var transparentRow = document.createElement('div');
+			transparentRow.className = 'geDialogCheckRow';
+			transparentRow.appendChild(transparentInput);
 
 			var span = document.createElement('span');
-			span.style.marginLeft = '4px';
 			mxUtils.write(span, mxResources.get('transparentBackground'));
-			optionsSection.appendChild(span);
+			transparentRow.appendChild(span);
 
 			mxEvent.addListener(span, 'click', function(e)
 			{
 				transparentInput.checked = true;
 				mxEvent.consume(e);
 			});
+
+			optionsSection.appendChild(transparentRow);
 		}
 
 		// Include diagram
 		var includeInput = document.createElement('input');
 		includeInput.setAttribute('type', 'checkbox');
-		includeInput.style.marginTop = '10px';
+		includeInput.style.marginRight = '8px';
 		includeInput.checked = (editorUi.lastPrintInclude != null) ?
 			editorUi.lastPrintInclude : Editor.defaultIncludeDiagram;
 
 		if (fn != null && !mxClient.IS_CHROMEAPP &&
 			editorUi.getServiceName() == 'draw.io')
 		{
-			mxUtils.br(optionsSection);
-			optionsSection.appendChild(includeInput);
+			var includeRow = document.createElement('div');
+			includeRow.className = 'geDialogCheckRow';
+			includeRow.appendChild(includeInput);
 
 			var span = document.createElement('span');
-			span.style.marginLeft = '4px';
 			mxUtils.write(span, mxResources.get('includeCopyOfMyDiagram'));
-			optionsSection.appendChild(span);
+			includeRow.appendChild(span);
 
 			mxEvent.addListener(span, 'click', function(e)
 			{
 				includeInput.checked = true;
 				mxEvent.consume(e);
 			});
+
+			optionsSection.appendChild(includeRow);
 		}
 
 
@@ -9928,7 +9981,7 @@
 
 		// Buttons
 		var buttons = document.createElement('div');
-		buttons.style.marginTop = '30px';
+		buttons.style.marginTop = '16px';
 		buttons.style.textAlign = 'right';
 		buttons.style.whiteSpace = 'nowrap';
 		

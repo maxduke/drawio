@@ -453,12 +453,12 @@ mxCellEditor.prototype.installListeners = function(elt)
 		}
 	});
 
-	mxEvent.addListener(elt, (!mxClient.IS_IE11 && !mxClient.IS_IE) ? 'input' : 'keyup', keyupHandler);
+	mxEvent.addListener(elt, 'input', keyupHandler);
 	mxEvent.addListener(elt, 'cut', keyupHandler);
 	mxEvent.addListener(elt, 'paste', keyupHandler);
 	
 	// Adds automatic resizing of the textbox while typing using input, keyup and/or DOM change events
-	var evtName = (!mxClient.IS_IE11 && !mxClient.IS_IE) ? 'input' : 'keydown';
+	var evtName = 'input';
 	
 	var resizeHandler = mxUtils.bind(this, function(evt)
 	{

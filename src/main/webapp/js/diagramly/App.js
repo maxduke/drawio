@@ -236,10 +236,9 @@ App.DROPBOX_URL = 'js/dropbox/Dropbox-sdk.min.js';
 App.DROPINS_URL = 'https://www.dropbox.com/static/api/2/dropins.js';
 
 /**
- * OneDrive Client JS (file/folder picker). This is a slightly modified version to allow using accessTokens
- * But it doesn't work for IE11, so we fallback to the original one
+ * OneDrive Client JS (file/folder picker). This is a slightly modified version to allow using accessTokens.
  */
-App.ONEDRIVE_URL = mxClient.IS_IE11? 'https://js.live.net/v7.2/OneDrive.js' : 'js/onedrive/OneDrive.js';
+App.ONEDRIVE_URL = 'js/onedrive/OneDrive.js';
 
 /**
  * Trello URL
@@ -518,11 +517,10 @@ App.getStoredMode = function()
 					}
 				}
 				
-				// Loads Trello for all browsers but < IE10 if not disabled or if enabled and in embed mode
+				// Loads Trello if not disabled or if enabled and in embed mode
 				if (typeof window.TrelloClient === 'function')
 				{
-					if (urlParams['tr'] == '1' && isSvgBrowser && !mxClient.IS_IE11 &&
-						(document.documentMode == null || document.documentMode >= 10))
+					if (urlParams['tr'] == '1' && isSvgBrowser)
 					{
 						// Immediately loads client
 						if (App.mode == App.MODE_TRELLO || (window.location.hash != null &&
@@ -649,10 +647,12 @@ App.main = function(callback, createUi)
 		
 		App.isMainCalled = true;
 
-		// Allows forcing Android detection via URL parameter for
-		// tablets using Chrome's "Request Desktop Site" mode where
-		// the user agent no longer contains "Android"
-		if (urlParams['android'] == '1')
+		// Detects Android tablets using Chrome's "Request Desktop Site"
+		// mode where the user agent shows Linux instead of Android.
+		// Use android=1 to force or android=0 to suppress detection.
+		if (urlParams['android'] == '1' || (urlParams['android'] != '0' &&
+			!mxClient.IS_ANDROID && mxClient.IS_LINUX && mxClient.IS_GC &&
+			navigator.maxTouchPoints > 1))
 		{
 			mxClient.IS_ANDROID = true;
 		}
@@ -1042,11 +1042,10 @@ App.main = function(callback, createUi)
 								window.OneDriveClient = null;
 							}
 							
-							// Loads Trello for all browsers but < IE10 if not disabled or if enabled and in embed mode
-							if (typeof window.TrelloClient === 'function' && !mxClient.IS_IE11 &&
+							// Loads Trello if not disabled or if enabled and in embed mode
+							if (typeof window.TrelloClient === 'function' &&
 								typeof window.Trello === 'undefined' && window.DrawTrelloClientCallback != null &&
-								urlParams['tr'] == '1' && (navigator.userAgent == null ||
-								navigator.userAgent.indexOf('MSIE') < 0 || document.documentMode >= 10))
+								urlParams['tr'] == '1')
 							{
 								mxscript(App.TRELLO_JQUERY_URL, function()
 								{
@@ -1527,9 +1526,7 @@ App.prototype.init = function()
 	 */
 	try
 	{
-		this.gitHub = (!mxClient.IS_IE || document.documentMode == 10 ||
-				mxClient.IS_IE11 || mxClient.IS_EDGE) &&
-				(urlParams['gh'] != '0' && (urlParams['embed'] != '1' ||
+		this.gitHub = (urlParams['gh'] != '0' && (urlParams['embed'] != '1' ||
 				urlParams['gh'] == '1')) ? new GitHubClient(this) : null;
 		
 		if (this.gitHub != null)
@@ -1554,9 +1551,7 @@ App.prototype.init = function()
 	 */
 	try
 	{
-		this.gitLab = (!mxClient.IS_IE || document.documentMode == 10 ||
-			mxClient.IS_IE11 || mxClient.IS_EDGE) &&
-			(urlParams['gl'] != '0' && (urlParams['embed'] != '1' ||
+		this.gitLab = (urlParams['gl'] != '0' && (urlParams['embed'] != '1' ||
 			urlParams['gl'] == '1')) ? new GitLabClient(this) : null;
 
 		if (this.gitLab != null)
@@ -3794,7 +3789,7 @@ App.prototype.openGenerateDialog = function(prompt)
 {
 	if (this.chatWindow == null)
 	{
-		this.chatWindow = new ChatWindow(this, 224, 104, 360, 460);
+		this.chatWindow = new ChatWindow(this, 224, 104, 360, 480);
 		this.chatWindow.window.addListener('show', mxUtils.bind(this, function()
 		{
 			this.fireEvent(new mxEventObject('chat'));
@@ -5007,7 +5002,7 @@ App.prototype.loadTemplate = function(url, onload, onerror, templateFilename, as
 	{
 		try
 		{
-			var data = (!base64) ? responseData : ((window.atob && !mxClient.IS_IE && !mxClient.IS_IE11) ?
+			var data = (!base64) ? responseData : ((window.atob) ?
 				atob(responseData) : Base64.decode(responseData));
 			
 			if (isVisioFilename || this.isVisioData(data))
@@ -7453,7 +7448,7 @@ App.prototype.convertFile = function(url, filename, mimeType, extension, success
 				    		else
 					    	{
 					    		// Workaround for character encoding issues in IE10/11
-					    		data = (window.atob && !mxClient.IS_IE && !mxClient.IS_IE11) ? atob(data) : Base64.decode(data);
+					    		data = (window.atob) ? atob(data) : Base64.decode(data);
 					    	}
 				    	}
 				    	

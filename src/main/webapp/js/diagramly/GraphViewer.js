@@ -395,8 +395,26 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 				{
 					if(this.handlingResize)
 						return;
-					
+
+					// Saves current page's hidden tags before switching
+					if (this.tagsEnabled && this.graphConfig.hiddenTags != null)
+					{
+						var curPageId = this.diagrams[this.currentPage].getAttribute('id');
+						this.graphConfig.hiddenTags[curPageId] =
+							(this.graph.hiddenTags.length > 0) ? this.graph.hiddenTags.slice() : null;
+					}
+
 					this.currentPage = mxUtils.mod(number, this.diagrams.length);
+
+					// Applies hidden tags before updating XML so that
+					// positionGraph uses the correct tag visibility
+					if (this.tagsEnabled && this.graphConfig.hiddenTags != null)
+					{
+						var pageId = this.diagrams[this.currentPage].getAttribute('id');
+						var pageTags = this.graphConfig.hiddenTags[pageId];
+						this.graph.hiddenTags = (pageTags != null && pageTags.length > 0) ? pageTags : [];
+					}
+
 					this.updateGraphXml(Editor.parseDiagramNode(this.diagrams[this.currentPage]));
 				};
 				
@@ -495,6 +513,20 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 					this.editor.setGraphXml(this.xmlNode);
 					this.graph.view.scale = this.graphConfig.zoom || 1;
 					visible = this.setLayersVisible();
+
+					// Applies initial hidden tags from config
+					if (this.tagsEnabled && this.graphConfig.hiddenTags != null &&
+						this.diagrams != null && this.diagrams[this.currentPage] != null)
+					{
+						var pageId = this.diagrams[this.currentPage].getAttribute('id');
+						var pageTags = this.graphConfig.hiddenTags[pageId];
+
+						if (pageTags != null && pageTags.length > 0)
+						{
+							this.graph.hiddenTags = pageTags;
+						}
+					}
+
 					this.fireEvent(new mxEventObject('graphInitialized'));
 					
 					if (!this.responsive)
@@ -923,7 +955,7 @@ GraphViewer.prototype.setGraphXml = function(xmlNode)
 		}
 	
 		if (!this.responsive)
-		{				
+		{
 			// Restores initial CSS state
 			if (this.widthIsEmpty)
 			{
@@ -934,10 +966,10 @@ GraphViewer.prototype.setGraphXml = function(xmlNode)
 			{
 				this.graph.container.style.width = this.initialWidth;
 			}
-			
+
 			this.positionGraph();
 		}
-		
+
 		this.graph.initialViewState = {
 			translate: this.graph.view.translate.clone(),
 			scale: this.graph.view.scale
@@ -1708,6 +1740,43 @@ GraphViewer.prototype.addToolbar = function()
 							return true;
 						}));
 
+						this.graph.addListener(mxEvent.REFRESH, mxUtils.bind(this, function()
+						{
+							if (this.autoCrop)
+							{
+								this.crop();
+							}
+							else if (this.autoOrigin)
+							{
+								var bounds = this.graph.getGraphBounds();
+								var v = this.graph.view;
+
+								if (bounds.x < 0 || bounds.y < 0)
+								{
+									this.crop();
+									this.graph.originalViewState = this.graph.initialViewState;
+
+									this.graph.initialViewState = {
+										translate: v.translate.clone(),
+										scale: v.scale
+									};
+								}
+								else if (this.graph.originalViewState != null &&
+									bounds.x / v.scale + this.graph.originalViewState.translate.x - v.translate.x > 0 &&
+									bounds.y / v.scale + this.graph.originalViewState.translate.y - v.translate.y > 0)
+								{
+									v.setTranslate(this.graph.originalViewState.translate.x,
+										this.graph.originalViewState.translate.y);
+									this.graph.originalViewState = null;
+
+									this.graph.initialViewState = {
+										translate: v.translate.clone(),
+										scale: v.scale
+									};
+								}
+							}
+						}));
+
 						tagsComponent.div.getElementsByTagName('div')[0].style.position = '';
 						tagsComponent.div.style.maxHeight = '160px';
 						tagsComponent.div.style.maxWidth = '120px';
@@ -2122,7 +2191,17 @@ GraphViewer.prototype.showLightbox = function(editable, closable, target)
 			
 			if (this.tagsEnabled)
 			{
-		    	param.tags = {};
+				// Saves current page's hidden tags before passing to lightbox
+				var curPageId = this.diagrams[this.currentPage].getAttribute('id');
+
+				if (this.graphConfig.hiddenTags == null)
+				{
+					this.graphConfig.hiddenTags = {};
+				}
+
+				this.graphConfig.hiddenTags[curPageId] =
+					(this.graph.hiddenTags.length > 0) ? this.graph.hiddenTags.slice() : null;
+		    	param.tags = this.graphConfig.hiddenTags;
 			}
 
 			if (this.graphConfig != null && this.graphConfig.nav != false)
@@ -2224,7 +2303,17 @@ GraphViewer.prototype.showLocalLightbox = function(container)
 
 	if (this.tagsEnabled)
 	{
-		urlParams['tags'] = '{}';
+		// Saves current page's hidden tags before passing to lightbox
+		var curPageId = this.diagrams[this.currentPage].getAttribute('id');
+
+		if (this.graphConfig.hiddenTags == null)
+		{
+			this.graphConfig.hiddenTags = {};
+		}
+
+		this.graphConfig.hiddenTags[curPageId] =
+			(this.graph.hiddenTags.length > 0) ? this.graph.hiddenTags.slice() : null;
+		urlParams['tags'] = JSON.stringify(this.graphConfig.hiddenTags);
 	}
 
 	if (container != null)
@@ -2366,19 +2455,30 @@ GraphViewer.prototype.showLocalLightbox = function(container)
 			}
 			
 			ui.setFileData(this.xml);
-			
+
+			// Applies initial hidden tags for the current page before
+			// lightboxFit so that the view fits the visible cells
+			if (this.tagsEnabled && this.graphConfig.hiddenTags != null &&
+				ui.currentPage != null)
+			{
+				var pageId = ui.currentPage.getId();
+				var pageTags = this.graphConfig.hiddenTags[pageId];
+				graph.hiddenTags = (pageTags != null && pageTags.length > 0) ? pageTags : [];
+				graph.refresh();
+			}
+
 			mxUtils.setPrefixedStyle(lightbox.style, 'transform', 'rotateY(0deg)');
 			ui.chromelessToolbar.style.bottom = 60 + 'px';
 			ui.chromelessToolbar.style.zIndex = this.lightboxZIndex;
-			
+
 			// Workaround for clipping in IE11-
 			(container || document.body).appendChild(ui.chromelessToolbar);
-		
+
 			ui.getEditBlankXml = mxUtils.bind(this, function()
 			{
 				return this.xml;
 			});
-		
+
 			this.showLayers(graph, this.graph);
 			ui.lightboxFit();
 			ui.chromelessResize();

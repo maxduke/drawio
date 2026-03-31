@@ -285,15 +285,8 @@ EditorUi = function(editor, container, lightbox)
 				return textEditing(evt);
 			};
 			
-			if (mxClient.IS_IE && (typeof(document.documentMode) === 'undefined' || document.documentMode < 9))
-			{
-				mxEvent.addListener(this.diagramContainer, 'contextmenu', linkHandler);
-			}
-			else
-			{
-				// Allows browser context menu outside of diagram and sidebar
-				this.diagramContainer.oncontextmenu = linkHandler;
-			}
+			// Allows browser context menu outside of diagram and sidebar
+			this.diagramContainer.oncontextmenu = linkHandler;
 		}
 		else
 		{
@@ -349,22 +342,83 @@ EditorUi = function(editor, container, lightbox)
 		{
 			var graphHandlerStart = graph.graphHandler.start;
 
-			graph.graphHandler.start = function()
+			graph.graphHandler.start = function(cell)
 			{
 				if (ui.hoverIcons != null)
 				{
 					ui.hoverIcons.reset();
 				}
 
-				if (ui.inlineToolbar != null && this.cell != null)
+				if (ui.inlineToolbar != null && cell != null)
 				{
 					ui.inlineToolbar.hide();
 				}
 
 				graphHandlerStart.apply(this, arguments);
 			};
+
+			var graphHandlerMouseUp = graph.graphHandler.mouseUp;
+
+			graph.graphHandler.mouseUp = function()
+			{
+				graphHandlerMouseUp.apply(this, arguments);
+
+				if (ui.inlineToolbar != null)
+				{
+					ui.inlineToolbar.updateSelection();
+				}
+			};
 		}
-		
+
+		// Hides inline toolbar when handles are being dragged
+		var vertexHandlerStart = mxVertexHandler.prototype.start;
+
+		mxVertexHandler.prototype.start = function()
+		{
+			if (ui.inlineToolbar != null)
+			{
+				ui.inlineToolbar.hide();
+			}
+
+			vertexHandlerStart.apply(this, arguments);
+		};
+
+		var vertexHandlerMouseUp2 = mxVertexHandler.prototype.mouseUp;
+
+		mxVertexHandler.prototype.mouseUp = function()
+		{
+			vertexHandlerMouseUp2.apply(this, arguments);
+
+			if (ui.inlineToolbar != null)
+			{
+				ui.inlineToolbar.updateSelection();
+			}
+		};
+
+		var edgeHandlerStart = mxEdgeHandler.prototype.start;
+
+		mxEdgeHandler.prototype.start = function()
+		{
+			if (ui.inlineToolbar != null)
+			{
+				ui.inlineToolbar.hide();
+			}
+
+			edgeHandlerStart.apply(this, arguments);
+		};
+
+		var edgeHandlerMouseUp2 = mxEdgeHandler.prototype.mouseUp;
+
+		mxEdgeHandler.prototype.mouseUp = function()
+		{
+			edgeHandlerMouseUp2.apply(this, arguments);
+
+			if (ui.inlineToolbar != null)
+			{
+				ui.inlineToolbar.updateSelection();
+			}
+		};
+
 		// Adds tooltip when mouse is over scrollbars to show space-drag panning option
 		mxEvent.addListener(this.diagramContainer, 'mousemove', mxUtils.bind(this, function(evt)
 		{
@@ -416,7 +470,7 @@ EditorUi = function(editor, container, lightbox)
 				graph.container.style.cursor = 'move';
 				
 				// Disables scroll after space keystroke with scrollbars
-				if (!graph.isEditing() && mxEvent.getSource(evt) == graph.container)
+				if (!graph.isEditing())
 				{
 					mxEvent.consume(evt);
 				}
@@ -2557,7 +2611,7 @@ EditorUi.prototype.onKeyDown = function(evt)
 					var nesting = graph.cellEditor.isContentEditing() && graph.cellEditor.isTextSelected();
 
 					if (window.getSelection && graph.cellEditor.isContentEditing() &&
-						!nesting && !mxClient.IS_IE && !mxClient.IS_IE11)
+						!nesting)
 					{
 						var selection = window.getSelection();
 						var container = (selection.rangeCount > 0) ? selection.getRangeAt(0).commonAncestorContainer : null;
@@ -3430,15 +3484,7 @@ EditorUi.prototype.initCanvas = function()
 			this.chromelessToolbar.style.padding = '10px 10px 8px 10px';
 			this.chromelessToolbar.style.left = (graph.isViewer()) ? '0' : '50%';
 
-			if (!mxClient.IS_IE && !mxClient.IS_IE11)
-			{
-				this.chromelessToolbar.style.backgroundColor = '#000000';
-			}
-			else
-			{
-				this.chromelessToolbar.style.backgroundColor = '#ffffff';
-				this.chromelessToolbar.style.border = '3px solid black';
-			}
+			this.chromelessToolbar.style.backgroundColor = '#000000';
 			
 			mxUtils.setPrefixedStyle(this.chromelessToolbar.style, 'borderRadius', '16px');
 			mxUtils.setPrefixedStyle(this.chromelessToolbar.style, 'transition', 'opacity 600ms ease-in-out');
@@ -3521,14 +3567,7 @@ EditorUi.prototype.initCanvas = function()
 				pageInfo.style.fontSize = '14px';
 				pageInfo.style.cursor = 'default';
 
-				if (!mxClient.IS_IE && !mxClient.IS_IE11)
-				{
-					pageInfo.style.color = '#ffffff';
-				}
-				else
-				{
-					pageInfo.style.color = '#000000';
-				}
+				pageInfo.style.color = '#ffffff';
 
 				this.chromelessToolbar.appendChild(pageInfo);
 				
@@ -3717,18 +3756,9 @@ EditorUi.prototype.initCanvas = function()
 						this.layersDialog.style.bottom = parseInt(this.chromelessToolbar.style.bottom) +
 							this.chromelessToolbar.offsetHeight + 4 + 'px';
 
-						if (!mxClient.IS_IE && !mxClient.IS_IE11)
-						{
-							this.layersDialog.style.backgroundColor = '#000000';
-							this.layersDialog.style.color = '#ffffff';
-							mxUtils.setOpacity(this.layersDialog, 80);
-						}
-						else
-						{
-							this.layersDialog.style.backgroundColor = '#ffffff';
-							this.layersDialog.style.border = '2px solid black';
-							this.layersDialog.style.color = '#000000';
-						}
+						this.layersDialog.style.backgroundColor = '#000000';
+						this.layersDialog.style.color = '#ffffff';
+						mxUtils.setOpacity(this.layersDialog, 80);
 
 						// Puts the dialog on top of the container z-index
 						var style = mxUtils.getCurrentStyle(this.editor.graph.container);
