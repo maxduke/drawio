@@ -258,6 +258,7 @@ glass=Vitro
 googleImages=Google Bildoj
 imageSearch=Bildoserĉo
 eip=EIP
+effects=Efektoj
 embed=Enkorpigi
 embedFonts=Enkorpigi tiparojn
 embedImages=Enkorpigi bildojn

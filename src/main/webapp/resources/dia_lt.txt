@@ -258,6 +258,7 @@ glass=Stiklas
 googleImages=Google paveikslėliai
 imageSearch=Paveikslėlių paieška
 eip=EIP
+effects=Efektai
 embed=Įterpti
 embedFonts=Įterpti šriftus
 embedImages=Įterpti paveikslėlius

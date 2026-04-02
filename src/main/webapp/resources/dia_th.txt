@@ -258,6 +258,7 @@ glass=แก้ว
 googleImages=รูปภาพจาก Google
 imageSearch=ค้นหารูปภาพ
 eip=EIP
+effects=เอฟเฟกต์
 embed=ฝังตัว
 embedFonts=ฝังแบบอักษร
 embedImages=ฝังรูปภาพ

@@ -258,6 +258,7 @@ glass=Vidrio
 googleImages=Imágenes de Google
 imageSearch=Búsqueda de imágenes
 eip=EIP
+effects=Efectos
 embed=Insertar
 embedFonts=Insertar fuentes
 embedImages=Insertar imágenes

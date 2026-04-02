@@ -5172,6 +5172,102 @@ Graph.prototype.createVertexWipeAnimation = function(state, wipeIn)
 };
 
 /**
+ * Creates a popup animation for the given vertex cell state using a
+ * damped spring that overshoots and oscillates around scale 1.0.
+ * The popIn parameter controls direction (true = appear, false = disappear).
+ */
+Graph.prototype.createVertexPopAnimation = function(state, popIn)
+{
+	var bds = new mxRectangle.fromRectangle(state.shape.bounds);
+	var cx = bds.getCenterX();
+	var cy = bds.getCenterY();
+
+	return {
+		execute: mxUtils.bind(this, function(step, steps)
+		{
+			if (state.shape != null)
+			{
+				var t = step / steps;
+
+				if (!popIn)
+				{
+					t = 1 - t;
+				}
+
+				// Damped spring: s = 1 - e^(-5t) * cos(5*PI*t)
+				var s = 1 - Math.exp(-5 * t) * Math.cos(5 * Math.PI * t);
+
+				state.shape.bounds = new mxRectangle(
+					cx - bds.width * s / 2,
+					cy - bds.height * s / 2,
+					bds.width * s,
+					bds.height * s);
+				state.shape.redraw();
+
+				if (step == 0)
+				{
+					Graph.setOpacityForNodes(
+						this.getNodesForCells([state.cell]), 1);
+				}
+
+				if (state.text != null && state.text.node != null)
+				{
+					state.text.node.style.opacity = Math.min(1, t * 3);
+				}
+			}
+		}),
+		stop: mxUtils.bind(this, function()
+		{
+			if (state.shape != null)
+			{
+				state.shape.bounds = bds;
+				state.shape.redraw();
+
+				if (state.text != null && state.text.node != null)
+				{
+					state.text.node.style.opacity = '';
+				}
+
+				Graph.setOpacityForNodes(
+					this.getNodesForCells([state.cell]),
+					(popIn) ? 1 : 0);
+			}
+		})
+	};
+};
+
+/**
+ * Creates pop animations for the given cells. Vertices use the elastic
+ * pop effect, edges use the existing wipe animation.
+ */
+Graph.prototype.createPopAnimations = function(cells, popIn)
+{
+	var animations = [];
+
+	for (var i = 0; i < cells.length; i++)
+	{
+		var state = this.view.getState(cells[i]);
+
+		if (state != null && state.shape != null)
+		{
+			if (this.model.isEdge(state.cell) &&
+				state.absolutePoints != null &&
+				state.absolutePoints.length > 1)
+			{
+				animations.push(this.createEdgeWipeAnimation(state, popIn));
+			}
+			else if (this.model.isVertex(state.cell) &&
+				state.shape.bounds != null)
+			{
+				animations.push(this.createVertexPopAnimation(state, popIn));
+			}
+		}
+	}
+
+	return animations;
+};
+
+/**
  * Runs the animations for the given cells.
  */
  Graph.prototype.executeAnimations = function(animations, done, steps, delay)

@@ -257,6 +257,7 @@ glass=Glass
 googleImages=Google Images
 imageSearch=Image Search
 eip=EIP
+effects=Effects
 embed=Embed
 embedFonts=Embed Fonts
 embedImages=Embed Images

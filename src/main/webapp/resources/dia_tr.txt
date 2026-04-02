@@ -258,6 +258,7 @@ glass=Cam
 googleImages=Google Görselleri
 imageSearch=Resim Arama
 eip=EIP
+effects=Efektler
 embed=Dahil et
 embedFonts=Fontları Dahil Et
 embedImages=Görselleri dahil et

@@ -254,6 +254,7 @@ glass=‫زجاجي‬
 googleImages=‫صور Google‬
 imageSearch=‫بحث Google‬
 eip=‫إي آي بي‬
+effects=‫تأثيرات‬
 embed=‫تضمين‬
 embedFonts=‫تضمين الخطوط‬
 embedImages=‫تضمين الصور‬

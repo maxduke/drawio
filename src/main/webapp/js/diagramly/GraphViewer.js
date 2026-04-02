@@ -397,7 +397,8 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 						return;
 
 					// Saves current page's hidden tags before switching
-					if (this.tagsEnabled && this.graphConfig.hiddenTags != null)
+					if (this.tagsEnabled && this.graphConfig.hiddenTags != null &&
+						this.diagrams[this.currentPage] != null)
 					{
 						var curPageId = this.diagrams[this.currentPage].getAttribute('id');
 						this.graphConfig.hiddenTags[curPageId] =
@@ -408,7 +409,8 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 
 					// Applies hidden tags before updating XML so that
 					// positionGraph uses the correct tag visibility
-					if (this.tagsEnabled && this.graphConfig.hiddenTags != null)
+					if (this.tagsEnabled && this.graphConfig.hiddenTags != null &&
+						this.diagrams[this.currentPage] != null)
 					{
 						var pageId = this.diagrams[this.currentPage].getAttribute('id');
 						var pageTags = this.graphConfig.hiddenTags[pageId];
@@ -899,8 +901,9 @@ GraphViewer.prototype.updateGraphXml = function(xmlNode)
 	this.fireEvent(new mxEventObject('graphChanged'));
 };
 
+
 /**
- * 
+ *
  */
 GraphViewer.prototype.setLayersVisible = function(visible)
 {
@@ -2189,7 +2192,8 @@ GraphViewer.prototype.showLightbox = function(editable, closable, target)
 		    	param.layers = 1;
 			}
 			
-			if (this.tagsEnabled)
+			if (this.tagsEnabled && this.diagrams != null &&
+				this.diagrams[this.currentPage] != null)
 			{
 				// Saves current page's hidden tags before passing to lightbox
 				var curPageId = this.diagrams[this.currentPage].getAttribute('id');
@@ -2301,7 +2305,8 @@ GraphViewer.prototype.showLocalLightbox = function(container)
 	urlParams['layers'] = (this.layersEnabled) ? '1' : '0';
 	urlParams['dark'] = (this.isDarkMode()) ? '1' : '0';
 
-	if (this.tagsEnabled)
+	if (this.tagsEnabled && this.diagrams != null &&
+		this.diagrams[this.currentPage] != null)
 	{
 		// Saves current page's hidden tags before passing to lightbox
 		var curPageId = this.diagrams[this.currentPage].getAttribute('id');

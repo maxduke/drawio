@@ -258,6 +258,7 @@ glass=වීදුරු
 googleImages=Google පින්තූර
 imageSearch=පින්තූර සෙවීම
 eip=EIP
+effects=ප්‍රයෝග
 embed=කාවැද්දීම
 embedFonts=අකුරු කාවැද්දීම
 embedImages=පින්තූර කාවැද්දීම

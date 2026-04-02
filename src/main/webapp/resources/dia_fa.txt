@@ -258,6 +258,7 @@ glass=‫شیشه‬
 googleImages=Google Images
 imageSearch=‫جستجوی تصویر‬
 eip=EIP
+effects=‫جلوه‌ها‬
 embed=‫جاسازی‬
 embedFonts=‫جاسازی فونت‌ها‬
 embedImages=‫جاسازی تصاویر‬

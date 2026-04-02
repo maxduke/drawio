@@ -258,6 +258,7 @@ glass=Kioo
 googleImages=Picha za Google
 imageSearch=Tafuta Picha
 eip=EIP
+effects=Athari
 embed=Pachika
 embedFonts=Pachika Fonti
 embedImages=Pachika Picha

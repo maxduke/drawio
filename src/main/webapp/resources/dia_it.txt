@@ -258,6 +258,7 @@ glass=Vetro
 googleImages=Google Immagini
 imageSearch=Ricerca immagine
 eip=EIP
+effects=Effetti
 embed=Integra
 embedFonts=Integra caratteri
 embedImages=Integra immagini

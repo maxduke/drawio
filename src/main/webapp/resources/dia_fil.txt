@@ -258,6 +258,7 @@ glass=Salamin
 googleImages=Google Images
 imageSearch=Paghanap ng Imahe
 eip=EIP
+effects=Mga epekto
 embed=Ilangkap
 embedFonts=Ilangkap ang mga Font
 embedImages=Ilangkap ang mga imahe

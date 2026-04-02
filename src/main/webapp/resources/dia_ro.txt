@@ -258,6 +258,7 @@ glass=Sticlă
 googleImages=Imagini Google
 imageSearch=Căutare imagini
 eip=EIP
+effects=Efecte
 embed=Încorporează
 embedFonts=Fonturi încorporate
 embedImages=Încorporează imagini

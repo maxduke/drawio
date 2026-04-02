@@ -258,6 +258,7 @@ glass=Üveg
 googleImages=Google képek
 imageSearch=Képkeresés
 eip=EIP
+effects=Effektusok
 embed=Beágyaz
 embedFonts=Betűkészletek beágyazása
 embedImages=Képek beágyazása

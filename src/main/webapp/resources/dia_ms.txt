@@ -258,6 +258,7 @@ glass=Kaca
 googleImages=Imej-imej Google
 imageSearch=Carian Imej
 eip=EIP
+effects=Kesan
 embed=Terbenam
 embedFonts=Benamkan Fon
 embedImages=Imej Benam

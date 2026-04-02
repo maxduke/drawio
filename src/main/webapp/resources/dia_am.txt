@@ -258,6 +258,7 @@ glass=መስታወት
 googleImages=Google ምስል
 imageSearch=ምስል ፈልግ
 eip=EIP
+effects=ውጤቶች
 embed=አካት
 embedFonts=ፎንቶችን አካት
 embedImages=ምስሎችን አካት

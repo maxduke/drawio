@@ -258,6 +258,7 @@ glass=કાચ
 googleImages=Google છબીઓ
 imageSearch=છબી શોધ
 eip=EIP
+effects=ઇફેક્ટ્સ
 embed=એમ્બેડ
 embedFonts=ફોન્ટ્સ એમ્બેડ કરો
 embedImages=છબીઓ એમ્બેડ કરો

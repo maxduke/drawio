@@ -465,13 +465,14 @@ EditorUi = function(editor, container, lightbox)
 			}
 			else if (evt.which == 32 /* Space */ && !graph.isEditing())
 			{
-				this.spaceDown = true;
-				this.hoverIcons.reset();
-				graph.container.style.cursor = 'move';
-				
-				// Disables scroll after space keystroke with scrollbars
-				if (!graph.isEditing())
+				var source = mxEvent.getSource(evt);
+
+				if (source.nodeName != 'INPUT' && source.nodeName != 'TEXTAREA' &&
+					source.nodeName != 'SELECT' && !source.isContentEditable)
 				{
+					this.spaceDown = true;
+					this.hoverIcons.reset();
+					graph.container.style.cursor = 'move';
 					mxEvent.consume(evt);
 				}
 			}
@@ -1128,7 +1129,7 @@ EditorUi.prototype.formatWidth = 240;
  * Specifies the default sidebar width.
  */
 EditorUi.prototype.defaultSidebarWidth = Math.min(screen.width / 2,
-	(urlParams['sidebar-entries'] != 'large') ? 220 : 230);
+	(urlParams['sidebar-entries'] != 'large') ? 232 : 242);
 
 /**
  * Specifies the position of the horizontal split bar.

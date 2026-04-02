@@ -258,6 +258,7 @@ glass=Sklo
 googleImages=Obrázky Google
 imageSearch=Vyhľadávanie obrázkov
 eip=EIP
+effects=Efekty
 embed=Vložiť
 embedFonts=Vložiť písma
 embedImages=Vložiť obrázky

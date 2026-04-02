@@ -258,6 +258,7 @@ glass=Vidre
 googleImages=Google Imatges
 imageSearch=Cerca d'imatges
 eip=EIP
+effects=Efectes
 embed=Incrusta
 embedFonts=Incrusta fonts
 embedImages=Incrusta imatges

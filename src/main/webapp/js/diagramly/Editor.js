@@ -8465,6 +8465,18 @@
 							this.getCellsForAction(action.wipeOut, true), false));
 					}
 
+					if (action.popIn != null)
+					{
+						animations = animations.concat(this.createPopAnimations(
+							this.getCellsForAction(action.popIn, true), true));
+					}
+
+					if (action.popOut != null)
+					{
+						animations = animations.concat(this.createPopAnimations(
+							this.getCellsForAction(action.popOut, true), false));
+					}
+
 					// Executes all actions that change cell states
 					if (action.toggle != null)
 					{
@@ -9630,7 +9642,7 @@
 		{
 			div.appendChild(pagesSection);
 		}
-		
+
 		// Selection only
 		var selectionSection = document.createElement('div');
 		selectionSection.className = 'geDialogCheckRow';
@@ -9656,7 +9668,17 @@
 
 		if (graph.isEnabled())
 		{
-			pagesSection.appendChild(selectionSection);
+			if (pageCount > 1)
+			{
+				pagesSection.appendChild(selectionSection);
+			}
+			else
+			{
+				var selectionWrapper = document.createElement('div');
+				selectionWrapper.className = 'geDialogSection';
+				selectionWrapper.appendChild(selectionSection);
+				div.appendChild(selectionWrapper);
+			}
 		}
 
 		if (!editorUi.isPagesEnabled() || editorUi.lastPrintPagesRadioChecked)

@@ -258,6 +258,7 @@ glass=မှန်
 googleImages=Google ပုံများ
 imageSearch=ပုံရှာဖွေခြင်း
 eip=EIP
+effects=အကျိုးသက်ရောက်မှုများ
 embed=မြှုပ်နှံခြင်း
 embedFonts=ဖောင့်များ မြှုပ်နှံခြင်း
 embedImages=ပုံများ မြှုပ်နှံခြင်း

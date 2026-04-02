@@ -258,6 +258,7 @@ glass=Kaca
 googleImages=Gambar Google
 imageSearch=Pencarian Gambar
 eip=EIP
+effects=Efek
 embed=Tanamkan
 embedFonts=Tanamkan Fonta
 embedImages=Tanamkan Gambar

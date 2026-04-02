@@ -6594,7 +6594,7 @@ mxGraph.prototype.translateCell = function(cell, dx, dy)
 {
 	var geo = this.model.getGeometry(cell);
 
-	if (geo != null)
+	if (geo != null && typeof geo.translate === 'function')
 	{
 		dx = parseFloat(dx);
 		dy = parseFloat(dy);

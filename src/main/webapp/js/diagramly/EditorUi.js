@@ -7962,14 +7962,9 @@
 		var edit = editSection.getEditInput();
 
 		// Cannot disable lightbox in iframes
-		if (showFrameOption)
+		if (showFrameOption && lightbox.checkRow != null)
 		{
-			if (lightbox.checkRow != null)
-			{
-				lightbox.checkRow.style.display = 'none';
-			}
-
-			dy -= 20;
+			lightbox.checkRow.style.display = 'none';
 		}
 
 		var layers = this.addCheckbox(optSection, mxResources.get('layers'),

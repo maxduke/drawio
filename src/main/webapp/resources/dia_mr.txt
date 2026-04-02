@@ -258,6 +258,7 @@ glass=काच
 googleImages=Google प्रतिमा
 imageSearch=प्रतिमा शोध
 eip=EIP
+effects=प्रभाव
 embed=एम्बेड करा
 embedFonts=फॉन्ट एम्बेड करा
 embedImages=प्रतिमा एम्बेड करा

@@ -258,6 +258,7 @@ glass=ഗ്ലാസ്
 googleImages=ഗൂഗിൾ ഇമേജസ്
 imageSearch=ചിത്ര തിരയൽ
 eip=EIP
+effects=ഇഫക്റ്റുകൾ
 embed=ഉൾച്ചേർക്കുക
 embedFonts=ഫോണ്ടുകൾ ഉൾച്ചേർക്കുക
 embedImages=ചിത്രങ്ങൾ ഉൾച്ചേർക്കുക

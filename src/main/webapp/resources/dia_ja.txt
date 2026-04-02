@@ -258,6 +258,7 @@ glass=ガラス
 googleImages=Google画像検索
 imageSearch=画像検索
 eip=EIP
+effects=効果
 embed=埋め込み
 embedFonts=フォントを埋め込む
 embedImages=画像を埋め込む

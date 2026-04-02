@@ -258,6 +258,7 @@ glass=Beira
 googleImages=Google Irudiak
 imageSearch=Irudi bilaketa
 eip=EIP
+effects=Efektuak
 embed=Txertatu
 embedFonts=Txertatu letra motak
 embedImages=Txertatu irudiak

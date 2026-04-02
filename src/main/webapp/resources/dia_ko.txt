@@ -258,6 +258,7 @@ glass=유리 효과
 googleImages=Google 이미지
 imageSearch=이미지 검색
 eip=EIP
+effects=효과
 embed=임베드
 embedFonts=글꼴 포함
 embedImages=이미지 포함

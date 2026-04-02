@@ -258,6 +258,7 @@ glass=Staklo
 googleImages=Google slike
 imageSearch=Pretraživač slika
 eip=EIP
+effects=Efekti
 embed=Ugradi
 embedFonts=Ugradi fontove
 embedImages=Ugradi slike

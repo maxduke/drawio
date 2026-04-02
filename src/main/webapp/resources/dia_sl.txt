@@ -258,6 +258,7 @@ glass=Steklo
 googleImages=Google Slike
 imageSearch=Iskanje slik
 eip=EIP
+effects=Učinki
 embed=Vdelaj
 embedFonts=Vdelaj pisave
 embedImages=Vdelaj slike

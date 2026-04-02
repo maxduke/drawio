@@ -2314,8 +2314,8 @@
 		{
 			if (mxClient.IS_CHROMEAPP || !editorUi.isOffline())
 			{
-				editorUi.showDialog(new MoreShapesDialog(editorUi, true).container, 640, (isLocalStorage) ?
-						((mxClient.IS_IOS) ? 480 : 460) : 440, true, true);
+				editorUi.showDialog(new MoreShapesDialog(editorUi, true).container, 680, (isLocalStorage) ?
+						((mxClient.IS_IOS) ? 500 : 480) : 460, true, true);
 			}
 			else
 			{

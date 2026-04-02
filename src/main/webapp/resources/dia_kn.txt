@@ -258,6 +258,7 @@ glass=ಗಾಜು
 googleImages=Google ಚಿತ್ರಗಳು
 imageSearch=ಚಿತ್ರ ಹುಡುಕಾಟ
 eip=EIP
+effects=ಪರಿಣಾಮಗಳು
 embed=ಎಂಬೆಡ್
 embedFonts=ಫಾಂಟ್‌ಗಳನ್ನು ಎಂಬೆಡ್ ಮಾಡಿ
 embedImages=ಚಿತ್ರಗಳನ್ನು ಎಂಬೆಡ್ ಮಾಡಿ

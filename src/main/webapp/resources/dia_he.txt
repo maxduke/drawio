@@ -254,6 +254,7 @@ glass=‫זכוכית‬
 googleImages=‫גוגל תמונות‬
 imageSearch=‫חיפוש תמונה‬
 eip=EIP
+effects=‫אפקטים‬
 embed=‫שבץ‬
 embedFonts=‫הטמע גופנים‬
 embedImages=‫שבץ תמונות‬

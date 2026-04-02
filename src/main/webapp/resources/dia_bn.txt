@@ -258,6 +258,7 @@ glass=গ্লাস
 googleImages=গুগল ইমেজ
 imageSearch=ছবি অনুসন্ধান
 eip=EIP
+effects=প্রভাব
 embed=এম্বেড
 embedFonts=ফন্ট এম্বেড করুন
 embedImages=ছবি এম্বেড করুন

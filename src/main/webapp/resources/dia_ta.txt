@@ -258,6 +258,7 @@ glass=கண்ணாடி
 googleImages=கூகிள் படங்கள்
 imageSearch=பட தேடல்
 eip=EIP
+effects=விளைவுகள்
 embed=உட்பொதி
 embedFonts=எழுத்துருக்களை உட்பொதி
 embedImages=படங்களை உட்பொதிக்கவும்

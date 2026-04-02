@@ -258,6 +258,7 @@ glass=Γυαλί
 googleImages=Εικόνες Google
 imageSearch=Αναζήτηση Εικόνας
 eip=EIP
+effects=Εφέ
 embed=Ενσωμάτωση
 embedFonts=Ενσωμάτωση Γραμματοσειρών
 embedImages=Ενσωμάτωση Εικόνων

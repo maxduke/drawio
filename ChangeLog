@@ -1,3 +1,27 @@
+02-APR-2026: 29.6.10
+
+- Fixes build dashboard URL
+- Fixes selection only option in print dialog for single page files [jgraph/drawio#5530]
+- Remove unused GraphViewer.mergeXmlDelta and helper functions
+- Adds pop effect easter egg to create hash property
+- Add collapsible sections to format panel
+- Increase sidebar padding and spacing for lighter feel
+- Increase sidebar padding and spacing for lighter feel
+- Enhance More Shapes dialog with new styles and layout adjustments
+- Improve More Shapes dialog footer spacing and alignment
+
+01-APR-2026: 29.6.9
+
+- Adds elastic pop animation and popIn/popOut custom link actions
+- fix: skip spacebar panning when focus is in a form element [jgraph/drawio#5529]
+
+31-MAR-2026: 29.6.8
+
+- Adds GraphViewer.mergeXmlDelta
+- Fixes dy is not defined in EditorUi.showPublishLinkDialog
+- Fixes TypeError in translateCell for invalid geometry objects
+- Fixes TypeError in GraphViewer hiddenTags when diagrams is undefined
+
 31-MAR-2026: 29.6.7
 
 - Adds compressed XML support for SVG CLI export [jgraph/drawio-desktop#2143]

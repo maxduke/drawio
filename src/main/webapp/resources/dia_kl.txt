@@ -258,6 +258,7 @@ glass=Glaasi
 googleImages=Google Assiit
 imageSearch=Assiit ujarleqqineq
 eip=EIP
+effects=Sunniutit
 embed=Ilanngullugu
 embedFonts=Fontit ilanngukkit
 embedImages=Assiit ilanngukkit

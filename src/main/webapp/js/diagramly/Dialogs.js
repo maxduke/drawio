@@ -10275,10 +10275,8 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 			{
 				(function(section)
 				{
-					var title = listEntry.cloneNode(false);
-					title.style.fontWeight = 'bold';
-					title.style.backgroundColor = 'light-dark(#e5e5e5, #505759)';
-					title.style.padding = '6px 0px 6px 20px';
+					var title = document.createElement('div');
+					title.className = 'geMoreShapesSectionHeader';
 					mxUtils.write(title, section.title);
 					list.appendChild(title);
 		
@@ -10286,20 +10284,18 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 					{
 						(function(entry)
 						{
-							var option = listEntry.cloneNode(false);
-							option.style.cursor = 'pointer';
-							option.style.padding = '4px 0px 4px 20px';
-							option.style.whiteSpace = 'nowrap';
-							option.style.overflow = 'hidden';
-							option.style.textOverflow = 'ellipsis';
+							var option = document.createElement('div');
+							option.className = 'geMoreShapesItem';
 							option.setAttribute('title', entry.title + ' (' + entry.id + ')');
-							
+
 							var checkbox = document.createElement('input');
 							checkbox.setAttribute('type', 'checkbox');
 							checkbox.checked = editorUi.sidebar.isEntryVisible(entry.id);
 							checkbox.defaultChecked = checkbox.checked;
 							option.appendChild(checkbox);
-							mxUtils.write(option, ' ' + entry.title);
+							var label = document.createElement('span');
+							mxUtils.write(label, entry.title);
+							option.appendChild(label);
 		
 							list.appendChild(option);
 							
@@ -10345,11 +10341,11 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 									
 									if (currentListItem != null)
 									{
-										currentListItem.style.backgroundColor = '';
+										currentListItem.classList.remove('geMoreShapesItemSelected');
 									}
-									
+
 									currentListItem = option;
-									currentListItem.style.backgroundColor = 'light-dark(#ebf2f9, #000000)';
+									currentListItem.classList.add('geMoreShapesItemSelected');
 									
 									if (evt != null)
 									{
@@ -10397,30 +10393,23 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 		list.style.position = 'absolute';
 		list.style.top = '40px';
 		list.style.left = '0px';
-		list.style.width = '202px';
-		list.style.bottom = '60px';
+		list.style.width = '220px';
+		list.style.bottom = '70px';
 		list.style.overflow = 'auto';
-		
+
+		preview.className = 'geMoreShapesPreview';
 		preview.style.position = 'absolute';
-		preview.style.left = '202px';
+		preview.style.left = '220px';
 		preview.style.right = '0px';
 		preview.style.top = '40px';
-		preview.style.bottom = '60px';
+		preview.style.bottom = '70px';
 		preview.style.overflow = 'auto';
-		preview.style.borderLeftStyle = 'solid';
-		preview.style.borderLeftWidth = '1px';
 		preview.style.textAlign = 'center';
-		
+
 		var currentListItem = null;
 		var applyFunctions = [];
-		
-		var listEntry = document.createElement('div');
-		listEntry.style.position = 'relative';
-		listEntry.style.left = '0px';
-		listEntry.style.right = '0px';
-		
+
 		addEntries(entries);
-		div.style.padding = '30px';
 		
 		div.appendChild(hd);
 		div.appendChild(list);
@@ -10429,56 +10418,47 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 		var buttons = document.createElement('div');
 		buttons.className = 'geDialogFooter';
 		buttons.style.position = 'absolute';
+		buttons.style.display = 'flex';
+		buttons.style.alignItems = 'center';
 		buttons.style.paddingRight = '16px';
+		buttons.style.paddingLeft = '16px';
 		buttons.style.left = '0px';
 		buttons.style.right = '0px';
 		buttons.style.bottom = '0px';
-		buttons.style.height = '60px';
-		buttons.style.lineHeight = '52px';
-		
+		buttons.style.height = '70px';
+
+		var checksDiv = document.createElement('div');
+		checksDiv.className = 'geMoreShapesFooterChecks';
+
+		var labelsLabel = document.createElement('label');
+		labelsLabel.className = 'geMoreShapesFooterCheck';
 		var labels = document.createElement('input');
 		labels.setAttribute('type', 'checkbox');
-		labels.style.position = 'relative';
-		labels.style.top = '1px';
 		labels.checked = editorUi.sidebar.sidebarTitles;
 		labels.defaultChecked = labels.checked;
-		buttons.appendChild(labels);
-		var span = document.createElement('span');
-		mxUtils.write(span, ' ' + mxResources.get('labels'));
-		span.style.paddingRight = '20px';
-		buttons.appendChild(span);
-		
-		mxEvent.addListener(span, 'click', function(evt)
-		{
-			labels.checked = !labels.checked;
-			mxEvent.consume(evt);
-		});
+		labelsLabel.appendChild(labels);
+		var labelsText = document.createElement('span');
+		mxUtils.write(labelsText, mxResources.get('labels'));
+		labelsLabel.appendChild(labelsText);
+		checksDiv.appendChild(labelsLabel);
 
 		var cb = document.createElement('input');
 		cb.setAttribute('type', 'checkbox');
-		
+
 		if (isLocalStorage || mxClient.IS_CHROMEAPP)
 		{
-			var span = document.createElement('span');
-			span.style.paddingRight = '20px';
-			span.appendChild(cb);
-			mxUtils.write(span, ' ' + mxResources.get('rememberThisSetting'));
-			cb.style.position = 'relative';
-			cb.style.top = '1px';
+			var rememberLabel = document.createElement('label');
+			rememberLabel.className = 'geMoreShapesFooterCheck';
 			cb.checked = true;
 			cb.defaultChecked = true;
-			
-			mxEvent.addListener(span, 'click', function(evt)
-			{
-				if (mxEvent.getSource(evt) != cb)
-				{
-					cb.checked = !cb.checked;
-					mxEvent.consume(evt);
-				}
-			});
-			
-			buttons.appendChild(span);
+			rememberLabel.appendChild(cb);
+			var rememberText = document.createElement('span');
+			mxUtils.write(rememberText, mxResources.get('rememberThisSetting'));
+			rememberLabel.appendChild(rememberText);
+			checksDiv.appendChild(rememberLabel);
 		}
+
+		buttons.appendChild(checksDiv);
 		
 		var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
 		{
@@ -10529,18 +10509,24 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 			editorUi.setSidebarTitles(labels.checked, cb.checked);
 		});
 		applyBtn.className = 'geBtn gePrimaryBtn';
-		
+
+		var btnsRight = document.createElement('div');
+		btnsRight.style.flex = '1';
+		btnsRight.style.textAlign = 'right';
+
 		if (editorUi.editor.cancelFirst)
 		{
-			buttons.appendChild(cancelBtn);
-			buttons.appendChild(applyBtn);
+			btnsRight.appendChild(cancelBtn);
+			btnsRight.appendChild(applyBtn);
 		}
 		else
 		{
-			buttons.appendChild(applyBtn);
-			buttons.appendChild(cancelBtn);
+			btnsRight.appendChild(applyBtn);
+			btnsRight.appendChild(cancelBtn);
 		}
-		
+
+		buttons.appendChild(btnsRight);
+
 		div.appendChild(buttons);
 	}
 	else

@@ -5,6 +5,7 @@ Format = function(editorUi, container)
 {
 	this.editorUi = editorUi;
 	this.container = container;
+	this.collapsedSections = {};
 };
 
 /**
@@ -542,7 +543,65 @@ BaseFormatPanel.prototype.createTitle = function(title)
 };
 
 /**
- * 
+ * Creates a collapsible section with a toggle chevron.
+ * Returns {wrapper, contentDiv} where contentDiv is the
+ * container for section content.
+ */
+BaseFormatPanel.prototype.createCollapsibleSection = function(title, defaultCollapsed)
+{
+	var state = this.format.collapsedSections;
+
+	// Use stored state if available, otherwise use default
+	var collapsed = (state[title] != null) ? state[title] : defaultCollapsed;
+
+	var wrapper = document.createElement('div');
+	wrapper.className = 'geFormatSection';
+
+	var titleDiv = document.createElement('div');
+	titleDiv.className = 'geCollapsibleTitle' + (collapsed ? '' : ' geExpanded');
+	titleDiv.setAttribute('title', title);
+	mxUtils.write(titleDiv, title);
+	wrapper.appendChild(titleDiv);
+
+	var contentDiv = document.createElement('div');
+	contentDiv.className = 'geCollapsibleContent' + (collapsed ? ' geCollapsed' : '');
+	wrapper.appendChild(contentDiv);
+
+	mxEvent.addListener(titleDiv, 'click', function()
+	{
+		titleDiv.classList.toggle('geExpanded');
+		contentDiv.classList.toggle('geCollapsed');
+		state[title] = !titleDiv.classList.contains('geExpanded');
+	});
+
+	return {wrapper: wrapper, contentDiv: contentDiv};
+};
+
+/**
+ * Hides the collapsible wrapper if inner panel is hidden (display none)
+ * or has no visible children. Also observes style changes to keep in sync.
+ */
+BaseFormatPanel.prototype.syncCollapsibleVisibility = function(wrapper, innerPanel)
+{
+	var update = function()
+	{
+		wrapper.style.display = (innerPanel.style.display == 'none') ? 'none' : '';
+	};
+
+	// Initial check
+	update();
+
+	// Observe attribute changes on inner panel for dynamic display toggling
+	if (typeof MutationObserver !== 'undefined')
+	{
+		var observer = new MutationObserver(update);
+		observer.observe(innerPanel, {attributes: true, attributeFilter: ['style']});
+		this.listeners.push({destroy: function() { observer.disconnect(); }});
+	}
+};
+
+/**
+ *
  */
 BaseFormatPanel.prototype.addAction = function(div, name)
 {
@@ -1592,31 +1651,52 @@ ArrangePanel.prototype.init = function()
 	if (ss.cells.length > 0)
 	{
 		this.container.appendChild(this.addLayerOps(this.createPanel()));
-		
+
 		// Special case that adds two panels
-		this.addGeometry(this.container);
-		this.addEdgeGeometry(this.container);
-	
+		var geoSec = this.createCollapsibleSection(mxResources.get('size') +
+			' / ' + mxResources.get('position'), false);
+		this.addGeometry(geoSec.contentDiv);
+
+		if (geoSec.contentDiv.childNodes.length > 0)
+		{
+			this.container.appendChild(geoSec.wrapper);
+		}
+
+		if (ss.edges.length > 0)
+		{
+			var edgeGeoSec = this.createCollapsibleSection(mxResources.get('waypoints', null, 'Waypoints'), false);
+			this.addEdgeGeometry(edgeGeoSec.contentDiv);
+			this.container.appendChild(edgeGeoSec.wrapper);
+		}
+
 		if (!ss.containsLabel || ss.edges.length == 0)
 		{
-			this.container.appendChild(this.addAngle(this.createPanel()));
+			var angleSec = this.createCollapsibleSection(mxResources.get('rotation'), true);
+			angleSec.contentDiv.appendChild(this.addAngle(this.createPanel()));
+			this.container.appendChild(angleSec.wrapper);
 		}
-		
+
 		if (!ss.containsLabel)
 		{
-			this.container.appendChild(this.addFlip(this.createPanel()));
+			var flipSec = this.createCollapsibleSection(mxResources.get('flip'), true);
+			flipSec.contentDiv.appendChild(this.addFlip(this.createPanel()));
+			this.container.appendChild(flipSec.wrapper);
 		}
 
 		this.container.appendChild(this.addAlign(this.createPanel()));
-		
+
 		if (ss.vertices.length > 1 && !ss.cell && !ss.row)
 		{
 			this.container.appendChild(this.addDistribute(this.createPanel()));
 		}
 
-		this.container.appendChild(this.addTable(this.createPanel()));
+		var tablePanel = this.addTable(this.createPanel());
+		var tableSec = this.createCollapsibleSection(mxResources.get('table'), true);
+		tableSec.contentDiv.appendChild(tablePanel);
+		this.container.appendChild(tableSec.wrapper);
+		this.syncCollapsibleVisibility(tableSec.wrapper, tablePanel);
 	}
-	
+
 	// Allows to lock/unload button to be added
 	this.container.appendChild(this.addGroupOps(this.createPanel()));
 };
@@ -1629,9 +1709,7 @@ ArrangePanel.prototype.addTable = function(div)
 	var ui = this.editorUi;
 	var editor = ui.editor;
 	var graph = editor.graph;
-	var ss = ui.getSelectionState();	
-	div.appendChild(this.createTitle(mxResources.get('table')));
-
+	var ss = ui.getSelectionState();
 	var panel = document.createElement('div');
 	panel.style.position = 'relative';
 	panel.style.paddingLeft = '0px';
@@ -3740,15 +3818,6 @@ TextFormatPanel.prototype.addFont = function(container)
 
 	var spacingPanel = this.createPanel();
 	spacingPanel.style.height = '86px';
-	
-	var span = document.createElement('div');
-	span.style.position = 'absolute';
-	span.style.width = '70px';
-	span.style.marginTop = '0px';
-	span.style.fontWeight = 'bold';
-	mxUtils.write(span, mxResources.get('spacing'));
-	span.setAttribute('title', mxResources.get('spacing'));
-	spacingPanel.appendChild(span);
 
 	var topUpdate, globalUpdate, leftUpdate, bottomUpdate, rightUpdate;
 	var topSpacing = this.addUnitInput(spacingPanel, this.getUnit(), 87, 52, function()
@@ -3793,7 +3862,9 @@ TextFormatPanel.prototype.addFont = function(container)
 	{
 		container.appendChild(extraPanel);
 		container.appendChild(this.createRelativeOption(mxResources.get('opacity'), mxConstants.STYLE_TEXT_OPACITY));
-		container.appendChild(spacingPanel);
+		var spacingSec = this.createCollapsibleSection(mxResources.get('spacing'), true);
+		spacingSec.contentDiv.appendChild(spacingPanel);
+		container.appendChild(spacingSec.wrapper);
 	}
 	else
 	{
@@ -4629,22 +4700,35 @@ StyleFormatPanel.prototype.init = function()
 
 		if (ss.fill)
 		{
-			this.container.appendChild(this.addFill(this.createPanel()));
+			var fillSec = this.createCollapsibleSection(mxResources.get('fill'), false);
+			fillSec.contentDiv.appendChild(this.addFill(this.createPanel()));
+			this.container.appendChild(fillSec.wrapper);
 		}
-	
-		this.container.appendChild(this.addStroke(this.createPanel()));
-		this.container.appendChild(this.addLineJumps(this.createPanel()));
+
+		var strokeSec = this.createCollapsibleSection(mxResources.get('line'), false);
+		strokeSec.contentDiv.appendChild(this.addStroke(this.createPanel()));
+		this.container.appendChild(strokeSec.wrapper);
+
+		var lineJumpsPanel = this.addLineJumps(this.createPanel());
+		var jumpsSec = this.createCollapsibleSection(mxResources.get('lineJumps'), true);
+		jumpsSec.contentDiv.appendChild(lineJumpsPanel);
+		this.container.appendChild(jumpsSec.wrapper);
+		this.syncCollapsibleVisibility(jumpsSec.wrapper, lineJumpsPanel);
+
 		var opacityPanel = this.createRelativeOption(mxResources.get('opacity'), mxConstants.STYLE_OPACITY);
 		this.container.appendChild(opacityPanel);
-		this.container.appendChild(this.addEffects(this.createPanel()));
+
+		var effectsSec = this.createCollapsibleSection(mxResources.get('effects'), true);
+		effectsSec.contentDiv.appendChild(this.addEffects(this.createPanel()));
+		this.container.appendChild(effectsSec.wrapper);
 	}
 
 	var opsPanel = this.createPanel();
-	
+
 	if (ss.cells.length == 1)
 	{
 		this.addEditOps(opsPanel);
-		
+
 		if (opsPanel.firstChild != null)
 		{
 			mxUtils.br(opsPanel);
@@ -7079,8 +7163,14 @@ DiagramFormatPanel.prototype.init = function()
 
 	if (graph.isEnabled())
 	{
-		this.container.appendChild(this.addOptions(this.createPanel()));
-		this.container.appendChild(this.addPaperSize(this.createPanel()));
+		var optSec = this.createCollapsibleSection(mxResources.get('options'), false);
+		optSec.contentDiv.appendChild(this.addOptions(this.createPanel()));
+		this.container.appendChild(optSec.wrapper);
+
+		var paperSec = this.createCollapsibleSection(mxResources.get('paperSize'), true);
+		paperSec.contentDiv.appendChild(this.addPaperSize(this.createPanel()));
+		this.container.appendChild(paperSec.wrapper);
+
 		this.container.appendChild(this.addStyleOps(this.createPanel()));
 	}
 };
@@ -7253,8 +7343,6 @@ DiagramFormatPanel.prototype.addOptions = function(div)
 	var editor = ui.editor;
 	var graph = editor.graph;
 	
-	div.appendChild(this.createTitle(mxResources.get('options')));	
-
 	if (graph.isEnabled())
 	{
 		// Connection arrows
@@ -7469,8 +7557,6 @@ DiagramFormatPanel.prototype.addPaperSize = function(div)
 	var editor = ui.editor;
 	var graph = editor.graph;
 	
-	div.appendChild(this.createTitle(mxResources.get('paperSize')));
-
 	var accessor = PageSetupDialog.addPageFormatPanel(div, 'formatpanel', graph.pageFormat, function(pageFormat)
 	{
 		if (graph.pageFormat == null || graph.pageFormat.width != pageFormat.width ||

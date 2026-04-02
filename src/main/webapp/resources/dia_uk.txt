@@ -258,6 +258,7 @@ glass=Скло
 googleImages=Google Зображення
 imageSearch=Пошук зображення
 eip=EIP
+effects=Ефекти
 embed=Вбудувати
 embedFonts=Вбудувати шрифти
 embedImages=Вбудувати зображення

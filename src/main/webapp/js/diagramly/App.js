@@ -3704,13 +3704,30 @@ App.prototype.executeCreateObject = function(value, done)
 					// Fits diagram to window
 					this.initialFitDiagram(1.2);
 
+					// Easter egg: pop effect animates all cells on load
+					if (value.effect == 'pop')
+					{
+						var graph = this.editor.graph;
+						var cells = graph.model.getDescendants(
+							graph.model.getRoot());
+						var nodes = graph.getNodesForCells(cells);
+						Graph.setOpacityForNodes(nodes, 0);
+
+						window.setTimeout(mxUtils.bind(this, function()
+						{
+							var animations = graph.createPopAnimations(
+								cells, true);
+							graph.executeAnimations(animations);
+						}), 200);
+					}
+
 					// Needs to go before upate of hash if
 					// it replaces the history state
 					if (done != null)
 					{
 						done();
 					}
-					
+
 					// Sets create value with compressed XML
 					value.type = 'xml';
 					value.compressed = true;

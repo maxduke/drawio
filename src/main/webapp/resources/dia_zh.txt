@@ -258,6 +258,7 @@ glass=玻璃
 googleImages=Google 图片
 imageSearch=图片搜索
 eip=EIP
+effects=效果
 embed=嵌入
 embedFonts=嵌入字体
 embedImages=嵌入图片

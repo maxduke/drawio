@@ -258,6 +258,7 @@ glass=గాజు
 googleImages=Google చిత్రాలు
 imageSearch=చిత్ర శోధన
 eip=EIP
+effects=ప్రభావాలు
 embed=పొందుపరచు
 embedFonts=ఫాంట్‌లను పొందుపరచు
 embedImages=చిత్రాలను పొందుపరచు

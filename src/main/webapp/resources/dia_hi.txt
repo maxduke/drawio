@@ -258,6 +258,7 @@ glass=ग्लास
 googleImages=Google छवियाँ
 imageSearch=छवि खोज
 eip=EIP
+effects=प्रभाव
 embed=एम्बेड करें
 embedFonts=फ़ॉन्ट एम्बेड करें
 embedImages=छवियाँ एम्बेड करें

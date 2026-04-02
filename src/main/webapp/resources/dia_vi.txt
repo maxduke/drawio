@@ -258,6 +258,7 @@ glass=Kính
 googleImages=Google Hình ảnh
 imageSearch=Tìm kiếm hình ảnh
 eip=EIP
+effects=Hiệu ứng
 embed=Nhúng
 embedFonts=Nhúng phông chữ
 embedImages=Nhúng hình ảnh

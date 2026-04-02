@@ -258,6 +258,7 @@ glass=Glas
 googleImages=Google Billeder
 imageSearch=Billedsøgning
 eip=EIP
+effects=Effekter
 embed=Integrer
 embedFonts=Integrer skrifttyper
 embedImages=Integrer billeder

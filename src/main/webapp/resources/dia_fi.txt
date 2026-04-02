@@ -258,6 +258,7 @@ glass=Lasi
 googleImages=Google Kuvat
 imageSearch=Kuvahaku
 eip=EIP
+effects=Tehosteet
 embed=Upota
 embedFonts=Upota fontteja
 embedImages=Upota kuvia

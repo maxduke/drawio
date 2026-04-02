@@ -257,6 +257,7 @@ glass=Glas
 googleImages=Google Afbeeldingen
 imageSearch=Afbeelding zoeken
 eip=EIP
+effects=Effecten
 embed=Insluiten
 embedFonts=Lettertypen insluiten
 embedImages=Afbeeldingen Insluiten

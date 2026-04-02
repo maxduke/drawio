@@ -258,6 +258,7 @@ glass=Klaas
 googleImages=Google Pildid
 imageSearch=Pildiotsing
 eip=EIP
+effects=Efektid
 embed=Manusta
 embedFonts=Manusta fondid
 embedImages=Manusta pildid
