@@ -322,7 +322,7 @@ mxSvgCanvas2D.prototype.allowConvertHtmlToSvg = false;
  */
 mxSvgCanvas2D.prototype.setCssText = function(elt, css)
 {
-	if (elt != null)
+	if (elt != null && typeof elt.setAttribute === 'function')
 	{
 		elt.setAttribute('style', css);
 	}

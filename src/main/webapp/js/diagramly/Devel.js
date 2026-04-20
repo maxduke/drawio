@@ -111,6 +111,7 @@ mxscript(geBasePath +'/Editor.js');
 mxscript(geBasePath +'/EditorUi.js');
 mxscript(geBasePath +'/Sidebar.js');
 mxscript(geBasePath +'/Graph.js');
+mxscript(geBasePath +'/InlineToolbar.js');
 mxscript(geBasePath +'/Format.js');
 mxscript(geBasePath +'/Shapes.js');
 mxscript(geBasePath +'/Actions.js');

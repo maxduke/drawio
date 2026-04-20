@@ -292,6 +292,11 @@
 	Editor.enableAnimations = true;
 
 	/**
+	 * Specifies if insert animations should be shown. Default is true.
+	 */
+	Editor.insertAnimations = true;
+
+	/**
 	 * Specifies if window docking should be enabled. Default is true.
 	 */
 	Editor.enableWindowDocking = urlParams['embedInline'] != '1';
@@ -2518,6 +2523,11 @@
 				Editor.enableLocalFonts = config.enableLocalFonts;
 			}
 
+			if (config.enableCustomGitLabUrl != null)
+			{
+				Editor.enableCustomGitLabUrl = config.enableCustomGitLabUrl;
+			}
+
 			if (config.defaultFonts != null)
 			{
 				Menus.prototype.defaultFonts = config.defaultFonts
@@ -2829,10 +2839,22 @@
 				Graph.prototype.defaultFoldingEnabled = config.defaultFoldingEnabled;
 			}
 
+			// Overrides folding icon size
+			if (config.foldingIconSize != null)
+			{
+				Graph.updateFoldingImages(config.foldingIconSize);
+			}
+
 			// Overrides mouse wheel function
 			if (config.zoomWheel != null)
 			{
 				Graph.zoomWheel = config.zoomWheel;
+			}
+
+			// Enables browser translation mirror
+			if (config.browserTranslate != null)
+			{
+				Graph.browserTranslate = config.browserTranslate;
 			}
 
 			// Overrides zoom factor
@@ -3044,6 +3066,11 @@
 			if (config.enableAnimations != null)
 			{
 				Editor.enableAnimations = config.enableAnimations;
+			}
+
+			if (config.insertAnimations != null)
+			{
+				Editor.insertAnimations = config.insertAnimations;
 			}
 
 			if (config.enableWindowDocking != null)
@@ -6073,6 +6100,18 @@
 			var that = this;
 			var graph = this.editorUi.editor.graph;
 			var secondLevel = [];
+
+			function safeDecodeURIComponent(value)
+			{
+				try
+				{
+					return decodeURIComponent(value);
+				}
+				catch (e)
+				{
+					return value;
+				}
+			};
 			
 			function insertAfter(newElem, curElem)
 			{
@@ -6366,7 +6405,7 @@
 				td = document.createElement('td');
 				td.className = 'gePropRowCell';
 				td.setAttribute('title', (pValue != null) ?
-					decodeURIComponent(pValue) : mxResources.get('none'));
+					safeDecodeURIComponent(pValue) : mxResources.get('none'));
 
 				mxEvent.addListener(td, 'click', mxUtils.bind(that, function(e)
 				{
@@ -6525,7 +6564,7 @@
 					let valueDiv = document.createElement('div');
 					valueDiv.className = 'gePropValue';
 					td.appendChild(valueDiv);
-					valueDiv.innerHTML = mxUtils.htmlEntities(decodeURIComponent(pValue));
+					valueDiv.innerHTML = mxUtils.htmlEntities(safeDecodeURIComponent(pValue));
 
 					mxEvent.addListener(td, 'click', mxUtils.bind(that, function(e)
 					{
@@ -6541,7 +6580,7 @@
 						valueDiv.innerHTML = '';
 						var input = document.createElement('input');
 						setElementPos(valueDiv, input);
-						input.value = decodeURIComponent(pValue);
+						input.value = safeDecodeURIComponent(pValue);
 						input.className = 'gePropEditor';
 						
 						if ((pType == 'int' || pType == 'float') && !prop.allowAuto)
@@ -6889,7 +6928,12 @@
 								for (var i = 0; i < cells.length; i++)
 								{
 									var style = graph.getModel().getStyle(cells[i]);
-									
+
+									if (style != null && typeof style !== 'string')
+									{
+										style = String(style);
+									}
+
 									if (colorset != null)
 									{
 										if (!mxEvent.isShiftDown(evt))
@@ -6928,7 +6972,7 @@
 										
 										if (!mxEvent.isAltDown(evt))
 										{
-											if (colorset['stroke'] == '' || colorset['fill'] == null)
+											if (colorset['stroke'] == '' || colorset['stroke'] == null)
 											{
 												style = mxUtils.setStyle(style, mxConstants.STYLE_STROKECOLOR, null);
 											}
@@ -7636,7 +7680,8 @@
 
 							var img = document.createElement('img');
 							img.setAttribute('src', visible ? Editor.visibleImage : Editor.hiddenImage);
-							img.setAttribute('title', mxResources.get(visible ? 'hideIt' : 'show', [tag]));
+							img.setAttribute('title', mxResources.get(visible ? 'hideIt' : 'show', [tag]) +
+								'\n' + mxResources.get('shiftClickShowOnly', [tag]));
 							mxUtils.setOpacity(img, visible ? 75 : 25);
 							img.className = 'geAdaptiveAsset';
 							img.style.verticalAlign = 'middle';
@@ -7654,7 +7699,39 @@
 							{
 								if (mxEvent.isShiftDown(evt))
 								{
-									setAllVisible(mxUtils.indexOf(graph.hiddenTags, tag) >= 0);
+									var otherTags = [];
+
+									for (var j = 0; j < allTags.length; j++)
+									{
+										if (allTags[j] !== tag)
+										{
+											otherTags.push(allTags[j]);
+										}
+									}
+
+									// If already showing only this tag, show all
+									var allOthersHidden = otherTags.length > 0;
+
+									for (var j = 0; j < otherTags.length; j++)
+									{
+										if (mxUtils.indexOf(graph.hiddenTags, otherTags[j]) < 0)
+										{
+											allOthersHidden = false;
+											break;
+										}
+									}
+
+									if (allOthersHidden && mxUtils.indexOf(graph.hiddenTags, tag) < 0)
+									{
+										graph.setHiddenTags([]);
+									}
+									else
+									{
+										graph.setHiddenTags(otherTags);
+									}
+
+									removeInvisibleSelectionCells();
+									graph.refresh();
 								}
 								else
 								{

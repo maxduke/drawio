@@ -430,6 +430,13 @@ body.high-contrast .toggle-field { border-bottom: 2px solid light-dark(var(--col
         </div>
         <div class="field-row">
           <div class="field">
+            <label for="cfg-foldingIconSize">Folding Icon Size</label>
+            <input type="number" id="cfg-foldingIconSize" data-key="foldingIconSize" placeholder="9" min="1">
+          </div>
+          <div class="field"></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
             <label for="cfg-pageFormatWidth">Page Width (1/10 inch)</label>
             <input type="number" id="cfg-pageFormatWidth" placeholder="850" min="1">
           </div>
@@ -966,7 +973,8 @@ body.high-contrast .toggle-field { border-bottom: 2px solid light-dark(var(--col
       { key: 'noAutoFocus', name: 'No Auto Focus', help: 'Disable auto-focus on startup' },
       { key: 'updateDefaultStyle', name: 'Update Default Style', help: 'Update defaults when styles change' },
       { key: 'mathematicalTypesetting', name: 'Math Typesetting', help: 'Enable MathJax for mathematical typesetting' },
-      { key: 'internationalization', name: 'Internationalization', help: 'Enable UI language translation' }
+      { key: 'internationalization', name: 'Internationalization', help: 'Enable UI language translation' },
+      { key: 'browserTranslate', name: 'Browser Translate', help: 'Mirror diagram text for browser translation engines (e.g. Chrome Translate)' }
     ],
     'canvas-toggles': [
       { key: 'defaultPageVisible', name: 'Page Visible', help: 'Show page outline on canvas' },
@@ -991,7 +999,8 @@ body.high-contrast .toggle-field { border-bottom: 2px solid light-dark(var(--col
     'appearance-toggles': [
       { key: 'enableCssDarkMode', name: 'CSS Dark Mode', help: 'Use CSS for dark mode rendering' },
       { key: 'enableLightDarkColors', name: 'Light/Dark Colors', help: 'Use CSS light-dark() color function' },
-      { key: 'enableAnimations', name: 'Enable Animations', help: 'Enable shape and layout animations' }
+      { key: 'enableAnimations', name: 'Enable Animations', help: 'Enable shape and layout animations' },
+      { key: 'insertAnimations', name: 'Insert Animations', help: 'Show pop animation when inserting shapes from the sidebar' }
     ],
     'sidebar-toggles': [
       { key: 'sidebarTitles', name: 'Sidebar Titles', help: 'Show titles in the sidebar' },
@@ -1016,7 +1025,8 @@ body.high-contrast .toggle-field { border-bottom: 2px solid light-dark(var(--col
     'advanced-toggles': [
       { key: 'shareCursorPosition', name: 'Share Cursor Position', help: 'Share cursor in real-time collaboration' },
       { key: 'showRemoteCursors', name: 'Show Remote Cursors', help: 'Display other users\' cursors' },
-      { key: 'oneDriveInlinePicker', name: 'OneDrive Inline Picker', help: 'Use inline picker for OneDrive' }
+      { key: 'oneDriveInlinePicker', name: 'OneDrive Inline Picker', help: 'Use inline picker for OneDrive' },
+      { key: 'enableCustomGitLabUrl', name: 'Enable Custom GitLab URL', help: 'Allow ?gitlab= / ?gitlab-id= URL parameters to override the default GitLab server. Enable only for self-hosted GitLab deployments.' }
     ],
     'embedding-toggles': [
       { key: 'passiveScroll', name: 'Passive Scroll', help: 'Enable passive scroll event listeners' },

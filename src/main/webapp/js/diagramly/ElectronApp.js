@@ -323,6 +323,7 @@ mxStencilRegistry.allowEval = false;
 			this.addSubmenu('exportAs', menu, parent);
 			menu.addSeparator(parent);
 			this.addSubmenu('embed', menu, parent);
+			this.addMenuItems(menu, ['presentationMode'], parent);
 			menu.addSeparator(parent);
 			this.addMenuItems(menu, ['newLibrary', 'openLibrary'], parent);
 
@@ -845,7 +846,7 @@ mxStencilRegistry.allowEval = false;
 					action: 'uninstallPlugin',
 					plugin: plugin
 				});
-			}, true).container, 360, 225, true, false);
+			}, true).container, 380, null, true, false);
 		});
 
 		editorUi.actions.addAction('exit', function()

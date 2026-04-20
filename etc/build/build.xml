@@ -154,6 +154,7 @@ OUTPUT FILES (in src/main/webapp/js/):
 				<file name="EditorUi.js" />
 				<file name="Sidebar.js" />
 				<file name="Graph.js" />
+				<file name="InlineToolbar.js" />
 				<file name="Format.js" />
 				<file name="Shapes.js" />
 				<file name="Actions.js" />

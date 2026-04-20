@@ -181,7 +181,7 @@ DrawioFile.prototype.getShadowPages = function()
 {
 	if (this.shadowPages == null)
 	{
-		this.shadowPages = this.ui.getPagesForXml(this.initialData);
+		this.shadowPages = this.ui.getPagesForXml(this.initialData, true);
 
 		if (this.shadowVars === undefined)
 		{
@@ -493,7 +493,7 @@ DrawioFile.prototype.mergeFile = function(file, success, error, diffShadow, imme
 					this.inConflictState = true;
 					this.invalidChecksum = true;
 					this.descriptorChanged();
-					
+
 					if (error != null)
 					{
 						error(e);
@@ -501,11 +501,14 @@ DrawioFile.prototype.mergeFile = function(file, success, error, diffShadow, imme
 
 					try
 					{
-						if (reportError)
+						// InvalidCharacterError from atob is corrupt patch data,
+						// not actionable (eg. external tools modifying files)
+						if (reportError && !(e instanceof DOMException &&
+							e.name == 'InvalidCharacterError'))
 						{
 							var user = this.getCurrentUser();
 							var uid = (user != null) ? user.id : 'unknown';
-							
+
 							EditorUi.logError('Error in mergeFile', null,
 								this.getMode() + '.' + this.getId(),
 								uid, e);
@@ -2657,7 +2660,8 @@ DrawioFile.prototype.fileSaved = function(savedData, lastDesc, success, error, t
 	{
 		this.inConflictState = false;
 		this.invalidChecksum = false;
-		pages = (pages != null) ? pages : this.ui.getPagesForXml(savedData);
+
+		pages = (pages != null) ? pages : this.ui.getPagesForXml(savedData, true);
 
 		try
 		{

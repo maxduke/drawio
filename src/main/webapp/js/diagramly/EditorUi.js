@@ -176,7 +176,8 @@
 					message != EditorUi.lastErrorMessage && message.indexOf('extension:') < 0 &&
 					message.indexOf('ResizeObserver loop completed with undelivered notifications') < 0 &&
 					err.stack.indexOf('extension:') < 0 && err.stack.indexOf('<anonymous>:') < 0 &&
-					err.stack.indexOf('/math4/es5/') < 0)
+					err.stack.indexOf('/math4/es5/') < 0 && err.stack.indexOf('blob:') < 0 &&
+					(message.indexOf('strict mode') < 0 || err.stack.indexOf('extensions.min.js') < 0))
 				{
 					EditorUi.lastErrorMessage = message;
 
@@ -3386,9 +3387,16 @@
 				}
 				else
 				{
-					this.createFile(this.defaultFilename,
-						this.getFileData(), null, null, null,
-						null, null, true);
+					try
+					{
+						this.createFile(this.defaultFilename,
+							this.getFileData(), null, null, null,
+							null, null, true);
+					}
+					catch (e)
+					{
+						this.handleError(e);
+					}
 				}
 			}
 		});
@@ -3438,6 +3446,14 @@
 				{
 					this.editor.graph.selectUnlockedLayer();
 					this.showLayersDialog();
+
+					// Refreshes layers window after file load since
+					// graph was disabled during model changes
+					if (this.actions.layersWindow != null)
+					{
+						this.actions.layersWindow.refreshLayers();
+					}
+
 					this.restoreLibraries();
 					
 					// Workaround for no initial focus in FF
@@ -3617,12 +3633,18 @@
 		
 		for (var i = 0; i < pages.length; i++)
 		{
+			// Skips null entries from pages with corrupt data
+			if (pages[i] == null)
+			{
+				continue;
+			}
+
 			this.updatePageRoot(pages[i]);
-			var diagram = pages[i].node.cloneNode(false);
-			
-			// FIXME: Check why names can be null in newer files
-			// ignore in hash and do not diff null names for now
-			diagram.removeAttribute('name');
+
+			// Only hashes known diagram attributes to avoid checksum
+			// errors from external tools adding extra attributes
+			var diagram = pages[i].node.ownerDocument.createElement('diagram');
+			diagram.setAttribute('id', pages[i].getId());
 			
 			// Model is only a holder for the root
 			model.root = pages[i].root;
@@ -3953,17 +3975,23 @@
 	{
 		var evtName = (findReplace) ? 'findReplace' : 'find';
 		var name = evtName + 'Window';
-		
+
 		if (this[name] == null)
 		{
 			var modern = (Editor.currentTheme == 'min' ||
-				Editor.currentTheme == 'simple' ||	
+				Editor.currentTheme == 'simple' ||
 				Editor.currentTheme == 'sketch');
-			var w = (findReplace) ? ((modern) ? 330 : 300) : 240;
-			var h = (findReplace) ? ((modern) ? 304 : 288) : 180;
-			this[name] = new FindWindow(this,
-				document.body.offsetWidth - (w + 20),
-				100, w, h, findReplace);
+			var saved = mxSettings.getWindowState(evtName);
+
+			var w = (saved != null && saved.w != null) ? saved.w :
+				((findReplace) ? ((modern) ? 330 : 300) : 240);
+			var h = (saved != null && saved.h != null) ? saved.h :
+				((findReplace) ? ((modern) ? 304 : 288) : 180);
+			var x = (saved != null && saved.x != null) ? saved.x :
+				document.body.offsetWidth - (w + 20);
+			var y = (saved != null && saved.y != null) ? saved.y : 100;
+
+			this[name] = new FindWindow(this, x, y, w, h, findReplace);
 			this[name].window.addListener('show', function()
 			{
 				this.fireEvent(new mxEventObject(evtName));
@@ -3972,6 +4000,14 @@
 			{
 				this.fireEvent(new mxEventObject(evtName));
 			});
+
+			this.installWindowPersistence(evtName, this[name]);
+
+			if (saved != null && searchTerms == null)
+			{
+				this.restoreWindowState(evtName, this[name]);
+			}
+
 			this[name].window.setVisible(true);
 		}
 		else if (searchTerms == null)
@@ -4283,7 +4319,7 @@
 					graph.getRubberband().execute(evt);
 					graph.getRubberband().reset();
 				}
-				else if (evt != null && mxEvent.getSource(evt).classList.contains('geLibraryButton'))
+				else if (evt != null && mxEvent.getSource(evt) != null && mxEvent.getSource(evt).classList.contains('geLibraryButton'))
 				{
 					this.showError(mxResources.get('error'), mxResources.get('nothingIsSelected'), mxResources.get('ok'));
 				}
@@ -5105,7 +5141,7 @@
 		});
 
 		var dlg = new BackgroundImageDialog(this, apply, img, color, showColor);
-		this.showDialog(dlg.container, 400, (showColor) ? 240 : 220, true, true);
+		this.showDialog(dlg.container, 400, null, true, true);
 		dlg.init();
 	};
 
@@ -5122,9 +5158,32 @@
 			{
 				this.showSplash();
 			}
-		}));
+		}), false, false, new mxRectangle(0, 0, 480, 320));
 		
 		dlg.init();
+	};
+
+	EditorUi.prototype.getCollapsedSections = function()
+	{
+		return mxSettings.getCollapsedSections();
+	};
+
+	EditorUi.prototype.getLibraryExpanded = function(id, defaultExpanded)
+	{
+		var state = mxSettings.getCollapsedLibraries();
+
+		return (state[id] != null) ? !state[id] : defaultExpanded;
+	};
+
+	EditorUi.prototype.setLibraryExpanded = function(id, expanded)
+	{
+		if (id != null)
+		{
+			var state = mxSettings.getCollapsedLibraries();
+			state[id] = !expanded;
+			mxSettings.setCollapsedLibraries(state);
+			mxSettings.save();
+		}
 	};
 
 	/**
@@ -5158,17 +5217,18 @@
 		var resume = (this.spinner != null && this.spinner.pause != null) ? this.spinner.pause() : function() {};
 		var e = (resp != null && resp.error != null) ? resp.error : resp;
 
-		// Logs errors and writes stack to console
+		// Handled errors are shown in the UI and logged to the console
+		// but no longer sent to the server log (only uncaught errors are logged)
 		if (resp != null && (urlParams['test'] == '1' || resp.stack != null) && resp.message != null)
 		{
 			try
 			{
-				if (!disableLogging)
-				{
-					EditorUi.logError('Caught: ' +
-						(resp.message == '' && resp.name != null) ? resp.name : resp.message,
-						resp.filename, resp.lineNumber, resp.columnNumber, resp, 'INFO');
-				}
+				//if (!disableLogging)
+				//{
+				//	EditorUi.logError('Caught: ' +
+				//		((resp.message == '' && resp.name != null) ? resp.name : resp.message),
+				//		resp.filename, resp.lineNumber, resp.columnNumber, resp, 'INFO');
+				//}
 
 				if ((urlParams['test'] == '1' || disableLogging) &&
 					window.console != null)
@@ -5879,7 +5939,8 @@
 	EditorUi.prototype.showTextDialog = function(title, text)
 	{
     	var dlg = new TextareaDialog(this, title, text, null, null, mxResources.get('close'));
-		this.showDialog(dlg.container, 620, 460, true, true, null, null, null, null, true);
+		this.showDialog(dlg.container, 620, 460, true, true, null, null, null,
+			new mxRectangle(0, 0, 440, 280), true);
 		dlg.init();
 		document.execCommand('selectall', false, null);
 	};
@@ -8105,7 +8166,8 @@
 		var optSection = document.createElement('div');
 		optSection.className = 'geDialogSection';
 
-		var selection = this.addCheckbox(optSection, mxResources.get('selectionOnly'), false,
+		var selection = this.addCheckbox(optSection, mxResources.get('selectionOnly'),
+			this.lastExportSelectionOnly && !this.editor.graph.isSelectionEmpty(),
 			this.editor.graph.isSelectionEmpty());
 		var include = (hideInclude) ? null :
 			this.addCheckbox(optSection, mxResources.get('includeCopyOfMyDiagram'),
@@ -8120,6 +8182,7 @@
 
 		var dlg = new CustomDialog(this, div, mxUtils.bind(this, function()
 		{
+			this.lastExportSelectionOnly = selection.checked;
 			var scale = parseInt(zoomInput.value) / 100 || 1;
 			var border = parseInt(borderInput.value) || 0;
 
@@ -8181,7 +8244,8 @@
 		optSection.className = 'geDialogSection';
 
 		var selection = this.addCheckbox(optSection, mxResources.get('selectionOnly'),
-			false, graph.isSelectionEmpty());
+			this.lastExportSelectionOnly && !graph.isSelectionEmpty(),
+			graph.isSelectionEmpty());
 
 		var cb6 = document.createElement('input');
 		cb6.setAttribute('disabled', 'disabled');
@@ -8260,7 +8324,7 @@
 		}
 		else
 		{
-			exportSelect.value = 'diagram';
+			exportSelect.value = (this.lastExportSelectionOnly) ? 'selectionOnly' : 'diagram';
 			cb6.setAttribute('checked', 'checked');
 			cb6.defaultChecked = true;
 
@@ -8470,18 +8534,22 @@
 
 		var dlg = new CustomDialog(this, div, mxUtils.bind(this, function()
 		{
+			this.lastExportSelectionOnly = selection.checked;
 			this.lastExportBorder = borderInput.value;
 			this.lastExportZoom = zoomInput.value;
 			this.lastEmbedImages = cb5.checked;
 			this.lastEmbedFonts = cb7.checked;
 			this.lastEmbedInclude = includeSelect.value;
 
-			callback(zoomInput.value, transparent.checked, !selection.checked, shadow.checked,
-				include.checked, cb5.checked && embedOption, borderInput.value, cb6.checked,
-				(format == 'png' || format == 'svg') && includeSelect.value == 'currentPage',
-				linkSelect.value, (grid != null) ? grid.checked : null,
-				(themeSelect != null) ? themeSelect.value : null,
-				exportSelect.value, cb7.checked);
+			if (callback != null)
+			{
+				callback(zoomInput.value, transparent.checked, !selection.checked, shadow.checked,
+					include.checked, cb5.checked && embedOption, borderInput.value, cb6.checked,
+					(format == 'png' || format == 'svg') && includeSelect.value == 'currentPage',
+					linkSelect.value, (grid != null) ? grid.checked : null,
+					(themeSelect != null) ? themeSelect.value : null,
+					exportSelect.value, cb7.checked);
+			}
 		}), null, btnLabel, helpLink);
 		this.showDialog(dlg.container, 360, null, true, true, null, null, null, null, true);
 		zoomInput.focus();
@@ -12173,6 +12241,13 @@
 			}
 
 			this.formatWidth = mxSettings.getFormatWidth();
+
+			var sw = mxSettings.getSidebarWidth();
+
+			if (sw != null)
+			{
+				this.hsplitPosition = parseInt(sw);
+			}
 		}
 
 		if (!this.formatEnabled)
@@ -12228,7 +12303,6 @@
 		};
 
 		// Resolves page links to page names for link overlay tooltips
-
 		graph.getLinkOverlayTooltip = function(link)
 		{
 			if (Graph.isPageLink(link) && editorUi.pages != null)
@@ -12603,6 +12677,15 @@
 		};
 
 		editorUiInit.apply(this, arguments);
+
+		// Deferred browser translation: only initialise the mirror
+		// on the main editor graph, and only once the browser has
+		// actually started translating the page.
+		if (Graph.browserTranslate)
+		{
+			graph.waitForBrowserTranslate();
+		}
+
 		this.editor.graph.addSvgShadow(graph.view.canvas.ownerSVGElement, null, true);
 		
 		if (this.menus != null)
@@ -12680,11 +12763,12 @@
 					{
 						if (graph.getSelectionCount() == 1)
 						{
-							this.addMenuItems(menu, ['-', 'copyStyle', 'pasteStyle'], null, evt);
+							this.addMenuItems(menu, ['-', 'copyStyle', 'pasteStyle',
+								'copyTextStyle', 'pasteTextStyle'], null, evt);
 						}
 						else
 						{
-							this.addMenuItems(menu, ['-', 'pasteStyle'], null, evt);
+							this.addMenuItems(menu, ['-', 'pasteStyle', 'pasteTextStyle'], null, evt);
 						}
 					}
 
@@ -13538,6 +13622,9 @@
 
 				this.fireEvent(new mxEventObject('themeInitialized'));
 			}
+
+			// Restore windows that were visible in the previous session
+			this.restoreVisibleWindows();
 
 			// Initial state of format panel and sidebar for kennedy
 			if (theme == 'kennedy')
@@ -14427,6 +14514,142 @@
 	};
 
 	/**
+	 * Restores windows that were visible when the page was last closed.
+	 * Called during initialization after theme setup.
+	 */
+	EditorUi.prototype.restoreVisibleWindows = function()
+	{
+		if (!Editor.isSettingsEnabled())
+		{
+			return;
+		}
+
+		// Lazily-created windows: trigger their creation if they were visible
+		var windowActions =
+		{
+			'layers': 'layers',
+			'outline': 'outline',
+			'tags': 'tags'
+		};
+
+		for (var name in windowActions)
+		{
+			var state = mxSettings.getWindowState(name);
+
+			if (state != null && state.visible)
+			{
+				var action = this.actions.get(windowActions[name]);
+
+				if (action != null)
+				{
+					action.funct();
+				}
+			}
+		}
+	};
+
+	/**
+	 * Saves the current state of the given window to mxSettings.
+	 */
+	EditorUi.prototype.saveWindowState = function(name, wrapperWindow)
+	{
+		var wnd = wrapperWindow.window;
+
+		mxSettings.setWindowState(name,
+		{
+			x: wnd.getX(),
+			y: wnd.getY(),
+			w: parseInt(wnd.div.style.width),
+			h: parseInt(wnd.div.style.height),
+			visible: wnd.isVisible(),
+			dockState: wnd.dockState || null,
+			dockAnchorRight: wnd._dockAnchorRight || null,
+			dockAnchorBottom: wnd._dockAnchorBottom || null,
+			dockOffsetX: wnd._dockOffsetX || null,
+			dockOffsetY: wnd._dockOffsetY || null
+		});
+
+		mxSettings.save();
+	};
+
+	/**
+	 * Restores the saved state of the given window from mxSettings.
+	 * Returns the saved state if found, null otherwise.
+	 */
+	EditorUi.prototype.restoreWindowState = function(name, wrapperWindow)
+	{
+		var state = mxSettings.getWindowState(name);
+
+		if (state == null)
+		{
+			return null;
+		}
+
+		var wnd = wrapperWindow.window;
+
+		// Restore size first so position clamping uses correct dimensions
+		if (state.w != null && state.h != null)
+		{
+			mxWindow.prototype.setSize.call(wnd, state.w, state.h);
+		}
+
+		// Restore position
+		if (state.x != null && state.y != null)
+		{
+			mxWindow.prototype.setLocation.call(wnd, state.x, state.y);
+		}
+
+		// Restore dock state
+		if (state.dockState != null && this.dockManager != null &&
+			Editor.enableWindowDocking)
+		{
+			wnd._dockAnchorRight = state.dockAnchorRight;
+			wnd._dockAnchorBottom = state.dockAnchorBottom;
+			wnd._dockOffsetX = state.dockOffsetX;
+			wnd._dockOffsetY = state.dockOffsetY;
+			wnd.dockState = state.dockState;
+			wnd.div.classList.add('mxWindowDocked');
+			this.dockManager.windows.push(wnd);
+			this.dockManager.pinToEdge(wnd);
+		}
+
+		// Ensure visible within current viewport
+		wnd.fit();
+
+		// Restore visibility
+		if (state.visible != null)
+		{
+			wnd.setVisible(state.visible);
+		}
+
+		return state;
+	};
+
+	/**
+	 * Installs listeners on the given window to persist its state.
+	 */
+	EditorUi.prototype.installWindowPersistence = function(name, wrapperWindow)
+	{
+		var ui = this;
+		var wnd = wrapperWindow.window;
+
+		var save = function()
+		{
+			ui.saveWindowState(name, wrapperWindow);
+		};
+
+		wnd.addListener(mxEvent.MOVE_END, save);
+		wnd.addListener(mxEvent.RESIZE_END, save);
+		wnd.addListener(mxEvent.SHOW, save);
+		wnd.addListener(mxEvent.HIDE, save);
+		wnd.addListener(mxEvent.DOCK, save);
+		wnd.addListener(mxEvent.UNDOCK, save);
+		wnd.addListener(mxEvent.MAXIMIZE, save);
+		wnd.addListener(mxEvent.MINIMIZE, save);
+		wnd.addListener(mxEvent.NORMALIZE, save);
+	};
+
+	/**
 	 * Creates the dock manager for window docking to viewport edges.
 	 */
 	EditorUi.prototype.createDockManager = function()
@@ -15313,13 +15536,17 @@
 		if (this.formatWindow == null)
 		{
 			var ui = this;
-			var x = Math.max(10, this.diagramContainer.parentNode.clientWidth - 256);
-			var y = 60;
-			var h = (urlParams['embedInline'] == '1') ? 600 :
+			var saved = mxSettings.getWindowState('format');
+			var x = (saved != null && saved.x != null) ? saved.x :
+				Math.max(10, this.diagramContainer.parentNode.clientWidth - 256);
+			var y = (saved != null && saved.y != null) ? saved.y : 60;
+			var w = (saved != null && saved.w != null) ? saved.w : 240;
+			var h = (saved != null && saved.h != null) ? saved.h :
+				((urlParams['embedInline'] == '1') ? 600 :
 				((urlParams['sketch'] == '1') ? 600 : Math.min(600,
-					this.editor.graph.container.clientHeight - 10));
-			
-			this.formatWindow = new WrapperWindow(this, mxResources.get('format'), x, y, 240, h,
+					this.editor.graph.container.clientHeight - 10)));
+
+			this.formatWindow = new WrapperWindow(this, mxResources.get('format'), x, y, w, h,
 				mxUtils.bind(this, function(container)
 			{
 				container.appendChild(this.formatContainer);
@@ -15336,26 +15563,26 @@
 			}));
 
 			var toggleMinimized = this.formatWindow.window.toggleMinimized;
-			var w = 240;
-			
+			var mw = w;
+
 			this.formatWindow.window.toggleMinimized = function()
 			{
 				toggleMinimized.apply(this, arguments);
-				
+
 				if (this.minimized)
 				{
-					w = parseInt(this.div.style.width);
+					mw = parseInt(this.div.style.width);
 					this.div.style.width = '140px';
 					this.table.style.width = '140px';
-					this.div.style.left = (parseInt(this.div.style.left) + w - 140) + 'px';
+					this.div.style.left = (parseInt(this.div.style.left) + mw - 140) + 'px';
 				}
 				else
 				{
-					this.div.style.width = w + 'px';
+					this.div.style.width = mw + 'px';
 					this.table.style.width = this.div.style.width;
-					this.div.style.left = (Math.max(0, parseInt(this.div.style.left) - w + 140)) + 'px';
+					this.div.style.left = (Math.max(0, parseInt(this.div.style.left) - mw + 140)) + 'px';
 				}
-				
+
 				ui.format.refresh();
 				this.fit();
 			};
@@ -15367,11 +15594,17 @@
 					this.formatWindow.window.toggleMinimized();
 				}
 			}));
-			
+
 			this.formatWindow.window.minimumSize = new mxRectangle(0, 0, 240, 80);
 
+			this.installWindowPersistence('format', this.formatWindow);
+
+			if (saved != null)
+			{
+				this.restoreWindowState('format', this.formatWindow);
+			}
 			// Sets initial state for format window
-			if (Editor.currentTheme == 'sketch' && this.formatEnabled)
+			else if (Editor.currentTheme == 'sketch' && this.formatEnabled)
 			{
 				window.setTimeout(mxUtils.bind(this, mxUtils.bind(this, function()
 				{
@@ -15592,28 +15825,43 @@
 	{
 		if (this.sidebarWindow == null)
 		{
-			var w = Math.min(this.diagramContainer.parentNode.clientWidth - 10, 218);
-			var h = (urlParams['embedInline'] == '1') ? 650 :
-				Math.min(this.diagramContainer.parentNode.clientHeight, 650);
+			var saved = mxSettings.getWindowState('shapes');
+			var w = (saved != null && saved.w != null) ? saved.w :
+				Math.min(this.diagramContainer.parentNode.clientWidth - 10, 230) - 6;
+			var h = (saved != null && saved.h != null) ? saved.h :
+				((urlParams['embedInline'] == '1') ? 650 :
+				Math.min(this.diagramContainer.parentNode.clientHeight, 650)) - 6;
 			var simpleTheme = Editor.currentTheme == 'simple' ||
 				Editor.currentTheme == 'sketch';
-			
+			var x = (saved != null && saved.x != null) ? saved.x :
+				((simpleTheme && urlParams['embedInline'] != '1') ? 66 : 10);
+			var y = (saved != null && saved.y != null) ? saved.y :
+				((simpleTheme && urlParams['embedInline'] != '1') ?
+				Math.max(30, (this.diagramContainer.parentNode.clientHeight - h) / 2) : 56);
+
 			this.sidebarWindow = new WrapperWindow(this, mxResources.get('shapes'),
-				(simpleTheme && urlParams['embedInline'] != '1') ? 66 : 10,
-				(simpleTheme && urlParams['embedInline'] != '1') ?
-					Math.max(30, (this.diagramContainer.parentNode.clientHeight - h) / 2) : 56,
-				w - 6, h - 6, mxUtils.bind(this, function(container)
+				x, y, w, h, mxUtils.bind(this, function(container)
 			{
 				this.createShapesPanel(container);
 			}));
-			
+
 			this.sidebarWindow.window.addListener(mxEvent.SHOW, mxUtils.bind(this, function()
 			{
 				this.sidebarWindow.window.fit();
 			}));
 
 			this.sidebarWindow.window.minimumSize = new mxRectangle(0, 0, 90, 90);
-			this.sidebarWindow.window.setVisible(false);
+
+			this.installWindowPersistence('shapes', this.sidebarWindow);
+
+			if (saved != null)
+			{
+				this.restoreWindowState('shapes', this.sidebarWindow);
+			}
+			else
+			{
+				this.sidebarWindow.window.setVisible(false);
+			}
 		}
 	};
 
@@ -16370,6 +16618,21 @@
 			{
 				mxSettings.setFormatWidth(this.formatWidth);
 				mxSettings.save();
+			});
+
+			this.addListener('sidebarWidthChanged', function()
+			{
+				mxSettings.setSidebarWidth(this.hsplitPosition);
+				mxSettings.save();
+			});
+
+			this.addListener('collapsedSectionsChanged', function()
+			{
+				if (this.format != null)
+				{
+					mxSettings.setCollapsedSections(this.format.collapsedSections);
+					mxSettings.save();
+				}
 			});
 		}
 	};
@@ -18208,14 +18471,19 @@
 		var y = 0;
 		var w = 0;
 		var h = 0;
-		
+
 		if (elt == null)
 		{
 			var b = document.body;
 			var d = document.documentElement;
-		
-			w = (b.clientWidth || d.clientWidth) - 3;
-			h = Math.max(b.clientHeight || 0, d.clientHeight) - 3;
+
+			if (b == null && d == null)
+			{
+				return null;
+			}
+
+			w = (((b != null) ? b.clientWidth : 0) || d.clientWidth) - 3;
+			h = Math.max((b != null) ? b.clientHeight : 0, d.clientHeight) - 3;
 		}
 		else
 		{
@@ -18225,7 +18493,7 @@
 			w = rect.width;
 			h = rect.height;
 		}
-		
+
 		var hl = document.createElement('div');
 		hl.style.zIndex = mxPopupMenu.prototype.zIndex + 2;
 		hl.style.border = '3px dotted rgb(254, 137, 12)';
@@ -18235,16 +18503,20 @@
 		hl.style.left = y + 'px';
 		hl.style.width = Math.max(0, w - 3) + 'px';
 		hl.style.height = Math.max(0, h - 3) + 'px';
-		
+
 		if (elt != null && elt.parentNode == this.editor.graph.container)
 		{
 			this.editor.graph.container.appendChild(hl);
 		}
-		else
+		else if (document.body != null)
 		{
 			document.body.appendChild(hl);
 		}
-		
+		else
+		{
+			return null;
+		}
+
 		return hl;
 	};
 	
@@ -20504,7 +20776,7 @@
 				buttons.appendChild(copyBtn);
 			}), true, null, null, 'https://www.drawio.com/doc/faq/apply-layouts');
 
-			this.showDialog(dlg.container, 620, 460, true, true);
+			this.showDialog(dlg.container, 620, 460, true, true, null, null, null, new mxRectangle(0, 0, 440, 280));
 			dlg.init();
 		}));
 	};
@@ -21465,7 +21737,7 @@
 	EditorUi.prototype.showLinkDialog = function(value, btnLabel, fn, showNewWindowOption, linkTarget)
 	{
 		var dlg = new LinkDialog(this, value, btnLabel, fn, true, showNewWindowOption, linkTarget);
-		this.showDialog(dlg.container, 440, 120, true, true);
+		this.showDialog(dlg.container, 440, null, true, true);
 		dlg.init();
 	};
 	
@@ -21656,6 +21928,8 @@
 		this.actions.get('connectionPoints').setEnabled(active);
 		this.actions.get('copyStyle').setEnabled(active && !graph.isSelectionEmpty());
 		this.actions.get('pasteStyle').setEnabled(this.copiedStyle != null && active && ss.cells.length > 0);
+		this.actions.get('copyTextStyle').setEnabled(active && !graph.isSelectionEmpty());
+		this.actions.get('pasteTextStyle').setEnabled(this.copiedTextStyle != null && active && ss.cells.length > 0);
 		this.actions.get('editGeometry').setEnabled(ss.vertices.length > 0);
 		this.actions.get('addToScratchpad').setEnabled(ss.cells.length > 0);
 		this.actions.get('createShape').setEnabled(active);

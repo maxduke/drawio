@@ -5,7 +5,7 @@ Format = function(editorUi, container)
 {
 	this.editorUi = editorUi;
 	this.container = container;
-	this.collapsedSections = {};
+	this.collapsedSections = editorUi.getCollapsedSections();
 };
 
 /**
@@ -567,11 +567,14 @@ BaseFormatPanel.prototype.createCollapsibleSection = function(title, defaultColl
 	contentDiv.className = 'geCollapsibleContent' + (collapsed ? ' geCollapsed' : '');
 	wrapper.appendChild(contentDiv);
 
+	var ui = this.format.editorUi;
+
 	mxEvent.addListener(titleDiv, 'click', function()
 	{
 		titleDiv.classList.toggle('geExpanded');
 		contentDiv.classList.toggle('geCollapsed');
 		state[title] = !titleDiv.classList.contains('geExpanded');
+		ui.fireEvent(new mxEventObject('collapsedSectionsChanged'));
 	});
 
 	return {wrapper: wrapper, contentDiv: contentDiv};
@@ -934,7 +937,7 @@ BaseFormatPanel.prototype.createCellOption = function(label, key, defaultValue, 
  * Adds the given color option.
  */
 BaseFormatPanel.prototype.createColorOption = function(label, getColorFn, setColorFn, defaultColor,
-	listener, callbackFn, hideCheckbox, defaultColorValue, singleColorMode, isDarkModeFn)
+	listener, callbackFn, hideCheckbox, defaultColorValue, singleColorMode, isDarkModeFn, title)
 {
 	var darkModeOverridden = isDarkModeFn != null;
 	isDarkModeFn = (isDarkModeFn != null) ? isDarkModeFn : Editor.isDarkMode;
@@ -1158,7 +1161,10 @@ BaseFormatPanel.prototype.createColorOption = function(label, getColorFn, setCol
 		{
 			apply(newColor);
 		}, (defaultColor == 'default') ? 'default' : null,
-			actualDefaultValue, singleColorMode);
+			actualDefaultValue, singleColorMode, title || label, function()
+		{
+			return getActualColorValue(getColorFn(), true);
+		});
 
 		mxEvent.consume(evt);
 	}));
@@ -1311,7 +1317,7 @@ BaseFormatPanel.prototype.createArrayCellColorOption = function(label, colorKey,
  * 
  */
 BaseFormatPanel.prototype.createCellColorOption = function(label, colorKey, defaultColor,
-	callbackFn, setStyleFn, defaultColorValue, undefinedValue, allowArrays)
+	callbackFn, setStyleFn, defaultColorValue, undefinedValue, allowArrays, title)
 {
 	var ui = this.editorUi;
 	var editor = ui.editor;
@@ -1388,7 +1394,7 @@ BaseFormatPanel.prototype.createCellColorOption = function(label, colorKey, defa
 			{
 				graph.getModel().removeListener(this.listener);
 			}
-		}, callbackFn, null, defaultColorValue);
+		}, callbackFn, null, defaultColorValue, null, null, title);
 	}
 };
 
@@ -3109,13 +3115,34 @@ TextFormatPanel.prototype.init = function()
  */
 TextFormatPanel.prototype.addFontOps = function(div)
 {
+	var copyBtn = this.addAction(div, 'copyTextStyle');
+	var pasteBtn = this.addAction(div, 'pasteTextStyle');
+
+	if (copyBtn != null && pasteBtn != null)
+	{
+		copyBtn.style.marginRight = '4px';
+		copyBtn.style.width = '104px';
+		pasteBtn.style.width = '104px';
+
+		// Remove br between copy and paste
+		if (copyBtn.nextSibling != null && copyBtn.nextSibling.nodeName == 'BR')
+		{
+			copyBtn.nextSibling.parentNode.removeChild(copyBtn.nextSibling);
+		}
+	}
+
+	if (copyBtn != null || pasteBtn != null)
+	{
+		mxUtils.br(div);
+	}
+
 	var count = this.addActions(div, ['removeFormat']);
 
-	if (count == 0)
+	if (count == 0 && copyBtn == null && pasteBtn == null)
 	{
 		div.style.display = 'none';
 	}
-	
+
 	return div;
 };
 
@@ -3651,6 +3678,14 @@ TextFormatPanel.prototype.addFont = function(container)
 	
 	panel.style.fontWeight = 'bold';
 	colorPanel.appendChild(panel);
+	// Hide label background/border options for curvedText shapes
+	// (SVG textPath does not support label backgrounds)
+	if (ss.style[mxConstants.STYLE_SHAPE] == 'curvedText')
+	{
+		bgPanel.style.display = 'none';
+		borderPanel.style.display = 'none';
+	}
+
 	colorPanel.appendChild(bgPanel);
 	
 	var textShadow = this.createCellOption(mxResources.get('shadow'),
@@ -3663,7 +3698,7 @@ TextFormatPanel.prototype.addFont = function(container)
 		textShadow.getElementsByTagName('input')[0].setAttribute('disabled', 'disabled');
 		mxUtils.setOpacity(textShadow, 60);
 	}
-	
+
 	if (!graph.cellEditor.isContentEditing())
 	{
 		colorPanel.appendChild(borderPanel);
@@ -4093,25 +4128,28 @@ TextFormatPanel.prototype.addFont = function(container)
 				ui.pickColor(color, function(newColor)
 				{
 					var targetElt = (tableCell != null && (evt == null || !mxEvent.isShiftDown(evt))) ? tableCell : currentTable;
-					
-					graph.processElements(targetElt, function(elt)
+
+					if (targetElt != null)
 					{
-						elt.style.border = null;
-					});
-					
-					if (newColor == null || newColor == mxConstants.NONE)
-					{
-						targetElt.removeAttribute('border');
-						targetElt.style.border = '';
-						targetElt.style.borderCollapse = '';
+						graph.processElements(targetElt, function(elt)
+						{
+							elt.style.border = null;
+						});
+
+						if (newColor == null || newColor == mxConstants.NONE)
+						{
+							targetElt.removeAttribute('border');
+							targetElt.style.border = '';
+							targetElt.style.borderCollapse = '';
+						}
+						else
+						{
+							targetElt.setAttribute('border', '1');
+							targetElt.style.border = '1px solid ' + newColor;
+							targetElt.style.borderCollapse = 'collapse';
+						}
 					}
-					else
-					{
-						targetElt.setAttribute('border', '1');
-						targetElt.style.border = '1px solid ' + newColor;
-						targetElt.style.borderCollapse = 'collapse';
-					}
-				});
+				}, null, null, null, mxResources.get('borderColor'));
 			}
 		}), tablePanel2),
 		ui.addButton(Editor.fillColorImage, mxResources.get('backgroundColor'),
@@ -4128,21 +4166,24 @@ TextFormatPanel.prototype.addFont = function(container)
 				ui.pickColor(color, function(newColor)
 				{
 					var targetElt = (tableCell != null && (evt == null || !mxEvent.isShiftDown(evt))) ? tableCell : currentTable;
-					
-					graph.processElements(targetElt, function(elt)
+
+					if (targetElt != null)
 					{
-						elt.style.backgroundColor = null;
-					});
-					
-					if (newColor == null || newColor == mxConstants.NONE)
-					{
-						targetElt.style.backgroundColor = '';
+						graph.processElements(targetElt, function(elt)
+						{
+							elt.style.backgroundColor = null;
+						});
+
+						if (newColor == null || newColor == mxConstants.NONE)
+						{
+							targetElt.style.backgroundColor = '';
+						}
+						else
+						{
+							targetElt.style.backgroundColor = newColor;
+						}
 					}
-					else
-					{
-						targetElt.style.backgroundColor = newColor;
-					}
-				});
+				}, null, null, null, mxResources.get('backgroundColor'));
 			}
 		}), tablePanel2),
 		ui.addButton(Editor.spacingImage, mxResources.get('spacing'),
@@ -4925,8 +4966,8 @@ StyleFormatPanel.prototype.addEditOps = function(div)
 		editSelect.className = 'geFullWidthElement';
 		
 		var ops = ['edit', 'copyAsText', 'editLink', 'editShape', 'editImage',
-			'editData', 'copyData', 'pasteData', 'editConnectionPoints',
-			'editGeometry', 'editPolygon', 'editTooltip', 'editStyle'];
+			'editData', 'copyData', 'pasteData',
+			'editConnectionPoints', 'editGeometry', 'editPolygon', 'editTooltip', 'editStyle'];
 		var libs = null;
 
 		if (this.editorUi.sidebar != null)
@@ -5083,7 +5124,8 @@ StyleFormatPanel.prototype.addFill = function(container)
 	{
 		graph.updateCellStyles({'gradientColor': color}, graph.getSelectionCells());
 	}, graph.getDefaultColor(ss.style, mxConstants.STYLE_GRADIENTCOLOR,
-		graph.shapeForegroundColor, graph.shapeBackgroundColor));
+		graph.shapeForegroundColor, graph.shapeBackgroundColor),
+		null, null, mxResources.get('gradientColor'));
 	
 	gradientPanel.style.fontWeight = 'bold';
 
@@ -5094,7 +5136,7 @@ StyleFormatPanel.prototype.addFill = function(container)
 	{
 		graph.setCellStyles(fillKey, color, ss.cells);
 	}), graph.getDefaultColor(ss.style, fillKey, graph.shapeBackgroundColor,
-		graph.shapeForegroundColor));
+		graph.shapeForegroundColor), null, null, mxResources.get('fillColor'));
 
 	fillPanel.style.fontWeight = 'bold';
 	var tmpColor = mxUtils.getValue(ss.style, fillKey, null);
@@ -5437,6 +5479,7 @@ StyleFormatPanel.prototype.addStroke = function(container)
 
 	var strokeKey = (ss.style.shape == 'image') ? mxConstants.STYLE_IMAGE_BORDER : mxConstants.STYLE_STROKECOLOR;
 	var label = (ss.style.shape == 'image') ? mxResources.get('border') : mxResources.get('line');
+	var strokeTitle = (ss.style.shape == 'image') ? mxResources.get('borderColor') : mxResources.get('strokeColor');
 
 	var lineColor = this.createCellColorOption(label, strokeKey, 'default', null, mxUtils.bind(this, function(color)
 	{
@@ -5461,7 +5504,7 @@ StyleFormatPanel.prototype.addStroke = function(container)
 				graph.setCellStyles(strokeKey, 'inherit', tableCells);
 			}
 		}
-	}), graph.shapeForegroundColor);
+	}), graph.shapeForegroundColor, null, null, strokeTitle);
 	
 	lineColor.style.fontWeight = 'bold';
 	lineColor.appendChild(styleSelect);
@@ -7531,7 +7574,8 @@ DiagramFormatPanel.prototype.addGridOption = function(container)
 		{
 			ui.removeListener(this.listener);
 		}
-	}, null, null, defaultGridColor, true, isDarkModeFn);
+	}, null, null, defaultGridColor, true, isDarkModeFn,
+		mxResources.get('gridColor'));
 
 	panel.appendChild(input);
 	panel.appendChild(stepper);

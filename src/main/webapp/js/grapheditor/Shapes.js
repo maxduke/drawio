@@ -5898,6 +5898,328 @@
 		};
 	}
 	
+	// CurvedTextShape - renders cell label along a curved path
+	function CurvedTextShape()
+	{
+		mxRectangleShape.call(this);
+	};
+
+	mxUtils.extend(CurvedTextShape, mxRectangleShape);
+
+	CurvedTextShape.prototype.arcStartY = 25;
+	CurvedTextShape.prototype.arcMidY = -25;
+	CurvedTextShape.prototype.arcEndY = 25;
+
+	CurvedTextShape.prototype.paintForeground = function(c, x, y, w, h)
+	{
+		mxRectangleShape.prototype.paintForeground.apply(this, arguments);
+
+		if (this.state == null)
+		{
+			return;
+		}
+
+		var graph = this.state.view.graph;
+
+		// Hide curved text while editing
+		if (graph.cellEditor != null &&
+			graph.cellEditor.editingCell == this.state.cell)
+		{
+			return;
+		}
+
+		var label = graph.convertValueToString(this.state.cell);
+
+		if (label == null || label.length == 0)
+		{
+			return;
+		}
+
+		var startY = parseFloat(mxUtils.getValue(this.style,
+			'arcStartY', this.arcStartY));
+		var midYOffset = parseFloat(mxUtils.getValue(this.style,
+			'arcMidY', this.arcMidY));
+		var endY = parseFloat(mxUtils.getValue(this.style,
+			'arcEndY', this.arcEndY));
+		var curveType = mxUtils.getValue(this.style, 'curveType', 'round');
+
+		// SVG textPath rendering (requires mxSvgCanvas2D)
+		if (c.root != null && typeof c.getBaseUrl === 'function')
+		{
+			// Remove previous custom group from prior repaint
+			if (this._curvedTextGroup != null && this._curvedTextGroup.parentNode != null)
+			{
+				this._curvedTextGroup.parentNode.removeChild(this._curvedTextGroup);
+			}
+
+			this._curvedTextGroup = null;
+
+			c.translate(x, y);
+			var s = c.state;
+
+			var fontSize = parseFloat(mxUtils.getValue(this.style,
+				mxConstants.STYLE_FONTSIZE, mxConstants.DEFAULT_FONTSIZE));
+
+			// Inset path by half font size to keep text inside bounds
+			var inset = fontSize / 2;
+
+			// Natural curve geometry (independent of cell height)
+			var chordMidY = (startY + endY) / 2;
+
+			// Clamp mid symmetrically: at least the default range,
+			// minor increase when height allows in both directions
+			var defaultMid = Math.abs(CurvedTextShape.prototype.arcMidY);
+			var maxMid = Math.max(defaultMid,
+				Math.min(chordMidY, h - chordMidY));
+			midYOffset = Math.max(-maxMid, Math.min(maxMid, midYOffset));
+
+			var naturalMidY = chordMidY + midYOffset;
+
+			// Curve's natural bounding box
+			var curveTopY = Math.min(startY, endY, naturalMidY);
+			var curveBottomY = Math.max(startY, endY, naturalMidY);
+			var curveNaturalHeight = curveBottomY - curveTopY;
+
+			// Vertical alignment positions curve within cell
+			var verticalAlign = mxUtils.getValue(this.style,
+				mxConstants.STYLE_VERTICAL_ALIGN, mxConstants.ALIGN_MIDDLE);
+			var padding = inset;
+			var yOffset;
+
+			if (verticalAlign == mxConstants.ALIGN_TOP)
+			{
+				yOffset = padding - curveTopY;
+			}
+			else if (verticalAlign == mxConstants.ALIGN_BOTTOM)
+			{
+				yOffset = (h - padding) - curveBottomY;
+			}
+			else // middle
+			{
+				yOffset = (h - curveNaturalHeight) / 2 - curveTopY;
+			}
+
+			// Store for handle synchronization
+			this._curveYOffset = yOffset;
+
+			// Control points with vertical offset (NOT clamped - curve
+			// shape is independent of cell height)
+			var lx0 = inset;
+			var ly0 = startY + yOffset;
+			var lx2 = w - inset;
+			var ly2 = endY + yOffset;
+			var lx1 = (lx0 + lx2) / 2;
+			var ly1 = naturalMidY + yOffset;
+
+
+
+			// Convert to screen coordinates
+			var sx0 = (lx0 + s.dx) * s.scale;
+			var sy0 = (ly0 + s.dy) * s.scale;
+			var sx1 = (lx1 + s.dx) * s.scale;
+			var sy1 = (ly1 + s.dy) * s.scale;
+			var sx2 = (lx2 + s.dx) * s.scale;
+			var sy2 = (ly2 + s.dy) * s.scale;
+
+			var pathD;
+			var pathLen;
+
+			if (curveType == 'round')
+			{
+				// Circular arc mode
+				var chord = Math.sqrt((sx2 - sx0) * (sx2 - sx0) + (sy2 - sy0) * (sy2 - sy0));
+				// Sagitta: perpendicular distance from chord midpoint to arc
+				var chordMidX = (sx0 + sx2) / 2;
+				var chordMidY = (sy0 + sy2) / 2;
+				var sag = Math.sqrt((sx1 - chordMidX) * (sx1 - chordMidX) +
+					(sy1 - chordMidY) * (sy1 - chordMidY));
+
+				if (sag < 0.5)
+				{
+					// Nearly straight - use a line
+					pathD = 'M ' + c.format(sx0) + ' ' + c.format(sy0) +
+						' L ' + c.format(sx2) + ' ' + c.format(sy2);
+					pathLen = chord;
+				}
+				else
+				{
+					var halfChord = chord / 2;
+					var radius = (halfChord * halfChord) / (2 * sag) + sag / 2;
+
+					// Sweep direction: arc must curve toward the control point
+					// Use cross product of chord vector and control offset to determine side
+					var cdx = sx2 - sx0, cdy = sy2 - sy0;
+					var pdx = sx1 - sx0, pdy = sy1 - sy0;
+					var cross = cdx * pdy - cdy * pdx;
+					var sweep = (cross > 0) ? 0 : 1;
+
+					// When sagitta exceeds half-chord, the arc spans > 180°
+					// and we need the major arc (large-arc-flag=1)
+					var largeArc = (sag > halfChord) ? 1 : 0;
+
+					pathD = 'M ' + c.format(sx0) + ' ' + c.format(sy0) +
+						' A ' + c.format(radius) + ' ' + c.format(radius) +
+						' 0 ' + largeArc + ' ' + sweep +
+						' ' + c.format(sx2) + ' ' + c.format(sy2);
+
+					// Arc length: R * theta
+					var sinVal = Math.min(1, halfChord / radius);
+					var theta = 2 * Math.asin(sinVal);
+
+					if (largeArc)
+					{
+						theta = 2 * Math.PI - theta;
+					}
+
+					pathLen = radius * theta;
+				}
+			}
+			else
+			{
+				// Quadratic Bezier mode
+				pathD = 'M ' + c.format(sx0) + ' ' + c.format(sy0) +
+					' Q ' + c.format(sx1) + ' ' + c.format(sy1) +
+					' ' + c.format(sx2) + ' ' + c.format(sy2);
+
+				var dx01 = sx1 - sx0, dy01 = sy1 - sy0;
+				var dx12 = sx2 - sx1, dy12 = sy2 - sy1;
+				var dx02 = sx2 - sx0, dy02 = sy2 - sy0;
+				pathLen = (Math.sqrt(dx01 * dx01 + dy01 * dy01) +
+					Math.sqrt(dx12 * dx12 + dy12 * dy12) +
+					Math.sqrt(dx02 * dx02 + dy02 * dy02)) / 2;
+			}
+
+			// Unique path ID (use object identity to avoid collisions across graphs)
+			var pathId = (c.idPrefix || '') + 'ctp-' + mxObjectIdentity.get(this);
+			var useBaseUrl = !mxClient.IS_CHROMEAPP && c.root.ownerDocument == document;
+			var base = useBaseUrl ? c.getBaseUrl().replace(/([\(\)])/g, '\\$1') : '';
+
+			// Create group with rotation/flip transform
+			var group = c.createElement('g');
+			var tr = s.transform || '';
+
+			if (tr.length > 0)
+			{
+				group.setAttribute('transform', tr);
+			}
+
+			if (s.alpha < 1)
+			{
+				group.setAttribute('opacity', s.alpha);
+			}
+
+			// Path definition in local defs
+			var defs = c.createElement('defs');
+			var path = c.createElement('path');
+			path.setAttribute('id', pathId);
+			path.setAttribute('d', pathD);
+			defs.appendChild(path);
+			group.appendChild(defs);
+
+			// Text element
+			var text = c.createElement('text');
+			var fontFamily = mxUtils.getValue(this.style,
+				mxConstants.STYLE_FONTFAMILY, mxConstants.DEFAULT_FONTFAMILY);
+			var fontColor = mxUtils.getValue(this.style,
+				mxConstants.STYLE_FONTCOLOR, '#000000');
+			var fontStyle = mxUtils.getValue(this.style,
+				mxConstants.STYLE_FONTSTYLE, 0);
+
+			text.setAttribute('font-size', (fontSize * s.scale) + 'px');
+			text.setAttribute('font-family', mxUtils.parseCssFontFamily(fontFamily));
+			text.setAttribute('fill', fontColor);
+
+			if ((fontStyle & mxConstants.FONT_BOLD) == mxConstants.FONT_BOLD)
+			{
+				text.setAttribute('font-weight', 'bold');
+			}
+
+			if ((fontStyle & mxConstants.FONT_ITALIC) == mxConstants.FONT_ITALIC)
+			{
+				text.setAttribute('font-style', 'italic');
+			}
+
+			var txtDecor = [];
+
+			if ((fontStyle & mxConstants.FONT_UNDERLINE) == mxConstants.FONT_UNDERLINE)
+			{
+				txtDecor.push('underline');
+			}
+
+			if ((fontStyle & mxConstants.FONT_STRIKETHROUGH) == mxConstants.FONT_STRIKETHROUGH)
+			{
+				txtDecor.push('line-through');
+			}
+
+			if (txtDecor.length > 0)
+			{
+				text.setAttribute('text-decoration', txtDecor.join(' '));
+			}
+
+			// Alignment
+			var align = mxUtils.getValue(this.style,
+				mxConstants.STYLE_ALIGN, mxConstants.ALIGN_CENTER);
+			var anchor = 'middle';
+			var offset = '50%';
+
+			if (align == mxConstants.ALIGN_LEFT)
+			{
+				anchor = 'start';
+				offset = '0%';
+			}
+			else if (align == mxConstants.ALIGN_RIGHT)
+			{
+				anchor = 'end';
+				offset = '100%';
+			}
+
+			text.setAttribute('text-anchor', anchor);
+			text.setAttribute('dominant-baseline', 'central');
+
+			// textPath element
+			var textPath = c.createElement('textPath');
+			textPath.setAttribute('startOffset', offset);
+
+			var hrefVal = (useBaseUrl ? base : '') + '#' + pathId;
+			textPath.setAttribute('href', hrefVal);
+
+			if (useBaseUrl)
+			{
+				textPath.setAttributeNS('http://www.w3.org/1999/xlink',
+					'xlink:href', hrefVal);
+			}
+
+			// Always set textLength so spacing adjusts smoothly with path length
+			textPath.setAttribute('textLength', pathLen);
+			textPath.setAttribute('lengthAdjust', 'spacing');
+
+			mxUtils.write(textPath, label);
+			text.appendChild(textPath);
+			group.appendChild(text);
+			c.root.appendChild(group);
+			this._curvedTextGroup = group;
+		}
+		else
+		{
+			// Fallback for non-SVG canvas: render as plain centered text
+			c.text(x + w / 2, y + h / 2, 0, 0, label, mxConstants.ALIGN_CENTER,
+				mxConstants.ALIGN_MIDDLE, false, '', null, false, 0);
+		}
+	};
+
+	CurvedTextShape.prototype.destroy = function()
+	{
+		if (this._curvedTextGroup != null && this._curvedTextGroup.parentNode != null)
+		{
+			this._curvedTextGroup.parentNode.removeChild(this._curvedTextGroup);
+		}
+
+		this._curvedTextGroup = null;
+		mxRectangleShape.prototype.destroy.apply(this, arguments);
+	};
+
+	mxCellRenderer.registerShape('curvedText', CurvedTextShape);
+
 	// Handlers are only added if mxVertexHandler is defined (ie. not in embedded graph)
 	if (typeof mxVertexHandler !== 'undefined')
 	{
@@ -6765,6 +7087,79 @@
 				
 				return handles;
 			},
+			'curvedText': function(state)
+			{
+				var inset = 10;
+
+				var getYOffset = function(st)
+				{
+					return (st.shape != null ? st.shape._curveYOffset : 0) || 0;
+				};
+
+				return [
+					createHandle(state, ['arcStartY'], function(bounds)
+					{
+						var val = parseFloat(mxUtils.getValue(this.state.style,
+							'arcStartY', CurvedTextShape.prototype.arcStartY));
+						var yOff = getYOffset(this.state);
+
+						return new mxPoint(bounds.x + inset,
+							bounds.y + Math.max(0, Math.min(bounds.height,
+							val + yOff)));
+					}, function(bounds, pt)
+					{
+						var yOff = getYOffset(this.state);
+						this.state.style['arcStartY'] = Math.round(
+							Math.max(0, Math.min(bounds.height,
+							pt.y - bounds.y)) - yOff);
+					}, false),
+					createHandle(state, ['arcMidY'], function(bounds)
+					{
+						var startVal = parseFloat(mxUtils.getValue(this.state.style,
+							'arcStartY', CurvedTextShape.prototype.arcStartY));
+						var endVal = parseFloat(mxUtils.getValue(this.state.style,
+							'arcEndY', CurvedTextShape.prototype.arcEndY));
+						var midOffset = parseFloat(mxUtils.getValue(this.state.style,
+							'arcMidY', CurvedTextShape.prototype.arcMidY));
+						var chordMidY = (startVal + endVal) / 2;
+						var yOff = getYOffset(this.state);
+
+						return new mxPoint(bounds.x + bounds.width / 2 + 10,
+							bounds.y + Math.max(0, Math.min(bounds.height,
+							chordMidY + midOffset + yOff)));
+					}, function(bounds, pt)
+					{
+						var startVal = parseFloat(mxUtils.getValue(this.state.style,
+							'arcStartY', CurvedTextShape.prototype.arcStartY));
+						var endVal = parseFloat(mxUtils.getValue(this.state.style,
+							'arcEndY', CurvedTextShape.prototype.arcEndY));
+						var chordMidY = (startVal + endVal) / 2;
+						var yOff = getYOffset(this.state);
+						var defaultMid = Math.abs(CurvedTextShape.prototype.arcMidY);
+						var maxMid = Math.max(defaultMid,
+							Math.min(chordMidY, bounds.height - chordMidY));
+						this.state.style['arcMidY'] = Math.round(Math.max(
+							-maxMid, Math.min(maxMid,
+							pt.y - bounds.y - yOff - chordMidY)));
+					}, false),
+					createHandle(state, ['arcEndY'], function(bounds)
+					{
+						var val = parseFloat(mxUtils.getValue(this.state.style,
+							'arcEndY', CurvedTextShape.prototype.arcEndY));
+						var yOff = getYOffset(this.state);
+
+						return new mxPoint(bounds.x + bounds.width - inset,
+							bounds.y + Math.max(0, Math.min(bounds.height,
+							val + yOff)));
+					}, function(bounds, pt)
+					{
+						var yOff = getYOffset(this.state);
+						this.state.style['arcEndY'] = Math.round(
+							Math.max(0, Math.min(bounds.height,
+							pt.y - bounds.y)) - yOff);
+					}, false)
+				];
+			},
 			'step': createDisplayHandleFunction(StepShape.prototype.size, true, null, true, StepShape.prototype.fixedSize),
 			'hexagon': createDisplayHandleFunction(HexagonShape.prototype.size, true, 0.5, true, HexagonShape.prototype.fixedSize),
 			'curlyBracket': createDisplayHandleFunction(CurlyBracketShape.prototype.size, false),
@@ -6870,6 +7265,102 @@
 		// Dummy entries to avoid NPE in embed mode
 		Graph.createHandle = function() {};
 		Graph.handleFactory = {};
+	}
+
+	// Autosize for curvedText: measure straight text width and reduce
+	// by a portion to account for the arc being longer than its chord
+	var origGetPreferredSize = Graph.prototype.getPreferredSizeForCell;
+
+	Graph.prototype.getPreferredSizeForCell = function(cell, textWidth, gridEnabled)
+	{
+		var style = this.getCellStyle(cell);
+
+		if (style != null && style[mxConstants.STYLE_SHAPE] == 'curvedText')
+		{
+			var label = this.convertValueToString(cell);
+
+			if (label != null && label.length > 0)
+			{
+				var fontSize = parseFloat(mxUtils.getValue(style,
+					mxConstants.STYLE_FONTSIZE, mxConstants.DEFAULT_FONTSIZE));
+				var fontFamily = mxUtils.getValue(style,
+					mxConstants.STYLE_FONTFAMILY, mxConstants.DEFAULT_FONTFAMILY);
+				var fontStyle = mxUtils.getValue(style,
+					mxConstants.STYLE_FONTSTYLE, 0);
+
+				var size = mxUtils.getSizeForString(label, fontSize,
+					fontFamily, null, fontStyle);
+				var width = size.width * 0.85;
+				var geo = this.model.getGeometry(cell);
+				var h = (geo != null) ? geo.height : 60;
+				gridEnabled = (gridEnabled != null) ? gridEnabled : this.gridEnabled;
+
+				if (gridEnabled)
+				{
+					width = this.snap(width + this.gridSize / 2);
+				}
+
+				return new mxRectangle(0, 0, Math.max(width,
+					2 * fontSize) + 10, h);
+			}
+
+			return null;
+		}
+
+		return origGetPreferredSize.apply(this, arguments);
+	};
+
+	// Forces repaint of curvedText shapes when cell value changes
+	var origCheckPlaceholder = mxCellRenderer.prototype.checkPlaceholderStyles;
+
+	mxCellRenderer.prototype.checkPlaceholderStyles = function(state)
+	{
+		if (state.style != null && state.style[mxConstants.STYLE_SHAPE] == 'curvedText')
+		{
+			return true;
+		}
+
+		return origCheckPlaceholder.apply(this, arguments);
+	};
+
+	// Redraws curvedText shape when editing starts/stops
+	if (typeof mxCellEditor !== 'undefined')
+	{
+		var origStartEditing = mxCellEditor.prototype.startEditing;
+
+		mxCellEditor.prototype.startEditing = function(cell, trigger)
+		{
+			origStartEditing.apply(this, arguments);
+
+			var state = this.graph.view.getState(cell);
+
+			if (state != null && state.style != null &&
+				state.style[mxConstants.STYLE_SHAPE] == 'curvedText' &&
+				state.shape != null)
+			{
+				state.shape.redraw();
+			}
+		};
+
+		var origStopEditing = mxCellEditor.prototype.stopEditing;
+
+		mxCellEditor.prototype.stopEditing = function(cancel)
+		{
+			var cell = this.editingCell;
+			origStopEditing.apply(this, arguments);
+
+			if (cell != null)
+			{
+				var state = this.graph.view.getState(cell);
+
+				if (state != null && state.style != null &&
+					state.style[mxConstants.STYLE_SHAPE] == 'curvedText' &&
+					state.shape != null)
+				{
+					state.shape.redraw();
+				}
+			}
+		};
 	}
 
 	 var isoHVector = new mxPoint(1, 0);
