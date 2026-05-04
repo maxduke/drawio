@@ -4759,8 +4759,29 @@
 		}
 		catch (e) {}
 
-		var latestIframeConfig = configObj;
+		var latestEditorConfig = configObj;
 		var activeTab = 'editor';
+		var modified = false;
+		var allowClose = false;
+
+		function confirmDiscard(onConfirm)
+		{
+			if (!modified)
+			{
+				onConfirm();
+			}
+			else
+			{
+				editorUi.confirm(mxResources.get('allChangesLost'), null, onConfirm,
+					mxResources.get('cancel'), mxResources.get('discardChanges'));
+			}
+		}
+
+		function closeDialog()
+		{
+			allowClose = true;
+			editorUi.hideDialog();
+		}
 
 		// Main container
 		var div = document.createElement('div');
@@ -4816,7 +4837,7 @@
 
 		div.appendChild(tabBar);
 
-		// Editor content (iframe)
+		// Visual editor content
 		var editorContent = document.createElement('div');
 		editorContent.style.position = 'absolute';
 		editorContent.style.left = '0';
@@ -4824,20 +4845,7 @@
 		editorContent.style.top = '30px';
 		editorContent.style.bottom = '50px';
 
-		var iframe = document.createElement('iframe');
-		iframe.style.width = '100%';
-		iframe.style.height = '100%';
-		iframe.style.border = 'none';
-		iframe.style.borderRadius = '4px';
-
-		var baseUrl = window.DRAWIO_BASE_URL || '';
-
-		if (baseUrl.length > 0 && baseUrl.charAt(baseUrl.length - 1) === '/')
-		{
-			baseUrl = baseUrl.substring(0, baseUrl.length - 1);
-		}
-
-		var hashData = {};
+		var editorContext = {};
 
 		try
 		{
@@ -4845,12 +4853,12 @@
 
 			if (graph.currentVertexStyle != null)
 			{
-				hashData.currentVertexStyle = graph.currentVertexStyle;
+				editorContext.currentVertexStyle = graph.currentVertexStyle;
 			}
 
 			if (graph.currentEdgeStyle != null)
 			{
-				hashData.currentEdgeStyle = graph.currentEdgeStyle;
+				editorContext.currentEdgeStyle = graph.currentEdgeStyle;
 			}
 		}
 		catch (e)
@@ -4858,9 +4866,17 @@
 			// ignore
 		}
 
-		iframe.src = baseUrl + '/config-editor.html#' +
-			encodeURIComponent(JSON.stringify(hashData));
-		editorContent.appendChild(iframe);
+		var configEditor = DrawioConfigEditor.install(editorContent, {
+			initialConfig: configObj,
+			editorContext: editorContext,
+			darkMode: Editor.isDarkMode != null && Editor.isDarkMode(),
+			highContrast: editorUi.isHighContrast(),
+			onConfigChanged: function(obj)
+			{
+				latestEditorConfig = obj;
+				modified = true;
+			}
+		});
 
 		// JSON content (textarea)
 		var jsonContent = document.createElement('div');
@@ -4892,6 +4908,8 @@
 			textarea.value = value || '';
 		}
 
+		mxEvent.addListener(textarea, 'input', function() { modified = true; });
+
 		jsonContent.appendChild(textarea);
 
 		div.appendChild(editorContent);
@@ -4904,9 +4922,9 @@
 
 			if (tab === 'json')
 			{
-				if (latestIframeConfig != null)
+				if (latestEditorConfig != null)
 				{
-					textarea.value = JSON.stringify(latestIframeConfig, null, 2);
+					textarea.value = JSON.stringify(latestEditorConfig, null, 2);
 				}
 
 				editorContent.style.display = 'none';
@@ -4924,12 +4942,8 @@
 				try
 				{
 					var obj = JSON.parse(textarea.value);
-					latestIframeConfig = obj;
-
-					if (iframe.contentWindow != null)
-					{
-						iframe.contentWindow.postMessage({type: 'setConfig', config: obj}, '*');
-					}
+					latestEditorConfig = obj;
+					configEditor.setConfig(obj);
 				}
 				catch (e) {}
 
@@ -4948,39 +4962,6 @@
 
 		mxEvent.addListener(editorTabBtn, 'click', function() { setActiveTab('editor'); });
 		mxEvent.addListener(jsonTabBtn, 'click', function() { setActiveTab('json'); });
-
-		// Handle messages from iframe
-		var messageHandler = function(event)
-		{
-			if (iframe.contentWindow != null && event.source === iframe.contentWindow)
-			{
-				if (event.data != null)
-				{
-					if (event.data.type === 'configChanged')
-					{
-						latestIframeConfig = event.data.config;
-					}
-					else if (event.data.type === 'ready')
-					{
-						iframe.contentWindow.postMessage({type: 'setConfig', config: configObj}, '*');
-
-						// Send dark mode state
-						if (Editor.isDarkMode != null && Editor.isDarkMode())
-						{
-							iframe.contentWindow.postMessage({type: 'setDarkMode', dark: true}, '*');
-						}
-
-						// Send high contrast state
-						if (editorUi.isHighContrast())
-						{
-							iframe.contentWindow.postMessage({type: 'setHighContrast', highContrast: true}, '*');
-						}
-					}
-				}
-			}
-		};
-
-		window.addEventListener('message', messageHandler);
 
 		// Buttons
 		var buttons = document.createElement('div');
@@ -5011,9 +4992,9 @@
 					var btn = mxUtils.button(label, function(e)
 					{
 						// Sync textarea from editor before calling button handler
-						if (activeTab === 'editor' && latestIframeConfig != null)
+						if (activeTab === 'editor' && latestEditorConfig != null)
 						{
-							textarea.value = JSON.stringify(latestIframeConfig, null, 2);
+							textarea.value = JSON.stringify(latestEditorConfig, null, 2);
 						}
 
 						origFn(e, textarea);
@@ -5032,7 +5013,7 @@
 
 		var closeBtn = mxUtils.button(mxResources.get('close'), function()
 		{
-			editorUi.hideDialog();
+			confirmDiscard(closeDialog);
 		});
 
 		closeBtn.setAttribute('title', 'Escape');
@@ -5044,8 +5025,8 @@
 
 			if (activeTab === 'editor')
 			{
-				newValue = (latestIframeConfig != null && Object.keys(latestIframeConfig).length > 0) ?
-					JSON.stringify(latestIframeConfig, null, 2) : '';
+				newValue = (latestEditorConfig != null && Object.keys(latestEditorConfig).length > 0) ?
+					JSON.stringify(latestEditorConfig, null, 2) : '';
 			}
 			else
 			{
@@ -5061,7 +5042,8 @@
 
 				if (newValue == value)
 				{
-					editorUi.hideDialog();
+					modified = false;
+					closeDialog();
 				}
 				else
 				{
@@ -5075,7 +5057,8 @@
 						localStorage.removeItem(key);
 					}
 
-					editorUi.hideDialog();
+					modified = false;
+					closeDialog();
 					editorUi.alert(mxResources.get('restartForChangeRequired'));
 				}
 			}
@@ -5111,9 +5094,15 @@
 
 		var w = (customButtons != null && customButtons.length > 2) ? 500 : 440;
 		editorUi.showDialog(div, 800, 600, true, false,
-			function()
+			function(cancel, isEsc)
 			{
-				window.removeEventListener('message', messageHandler);
+				if (allowClose || !modified)
+				{
+					return;
+				}
+
+				confirmDiscard(closeDialog);
+				return false;
 			}, null, null, new mxRectangle(0, 0, w, 400));
 
 		textarea.scrollTop = 0;

@@ -1994,16 +1994,19 @@
 		{
 			var margin = (Math.max(2, this.strokewidth + 1) * 2 + parseFloat(
 				this.style[mxConstants.STYLE_MARGIN] || 0)) * this.scale;
-		
+
 			return new mxRectangle(rect.x + margin, rect.y + margin,
 				rect.width - 2 * margin, rect.height - 2 * margin);
 		}
-		
+
 		return rect;
 	};
 	mxRhombus.prototype.paintVertexShape = function(c, x, y, w, h)
 	{
 		mxRhombusPaintVertexShape.apply(this, arguments);
+
+		// Stash original bounds; double-handling below mutates x, y, w, h.
+		var gx = x, gy = y, gw = w, gh = h;
 
 		if (!this.outline && this.style['double'] == 1)
 		{
@@ -2013,15 +2016,93 @@
 			y += margin;
 			w -= 2 * margin;
 			h -= 2 * margin;
-			
+
 			if (w > 0 && h > 0)
 			{
 				c.setShadow(false);
-				
+
 				// Workaround for closure compiler bug where the lines with x and y above
 				// are removed if arguments is used as second argument in call below.
 				mxRhombusPaintVertexShape.apply(this, [c, x, y, w, h]);
 			}
+		}
+
+		if (this.glass && !this.outline && this.fill != null && this.fill != mxConstants.NONE)
+		{
+			this.paintGlassEffect(c, gx, gy, gw, gh, 0);
+		}
+	};
+
+	// Refactors paintGlassEffect to delegate path drawing to a paintGlassEffectPath hook,
+	// allowing non-rectangular shapes (ellipse, rhombus) to provide silhouette-matching paths.
+	mxShape.prototype.paintGlassEffect = function(c, x, y, w, h, arc)
+	{
+		var sw = Math.ceil(this.strokewidth / 2);
+		c.setGradient('#ffffff', '#ffffff', x, y, w, h * 0.6, 'south', 0.9, 0.1);
+		c.begin();
+		this.paintGlassEffectPath(c, x, y, w, h, sw, arc);
+		c.close();
+		c.fill();
+	};
+
+	mxShape.prototype.paintGlassEffectPath = function(c, x, y, w, h, sw, arc)
+	{
+		arc += 2 * sw;
+
+		if (this.isRounded)
+		{
+			c.moveTo(x - sw + arc, y - sw);
+			c.quadTo(x - sw, y - sw, x - sw, y - sw + arc);
+			c.lineTo(x - sw, y + h * 0.4);
+			c.quadTo(x + w * 0.5, y + h * 0.7, x + w + sw, y + h * 0.4);
+			c.lineTo(x + w + sw, y - sw + arc);
+			c.quadTo(x + w + sw, y - sw, x + w + sw - arc, y - sw);
+		}
+		else
+		{
+			c.moveTo(x - sw, y - sw);
+			c.lineTo(x - sw, y + h * 0.4);
+			c.quadTo(x + w * 0.5, y + h * 0.7, x + w + sw, y + h * 0.4);
+			c.lineTo(x + w + sw, y - sw);
+		}
+	};
+
+	// Cubic bezier approximation of the top half of the ellipse, then a wave back through
+	// the middle to close the highlight (matches the dip in the rectangular variant).
+	mxEllipse.prototype.paintGlassEffectPath = function(c, x, y, w, h, sw, arc)
+	{
+		var kappa = 0.5522847498;
+		var rx = w / 2 + sw;
+		var ry = h / 2 + sw;
+		var cx = x + w / 2;
+		var cy = y + h / 2;
+
+		c.moveTo(cx - rx, cy);
+		c.curveTo(cx - rx, cy - ry * kappa, cx - rx * kappa, cy - ry, cx, cy - ry);
+		c.curveTo(cx + rx * kappa, cy - ry, cx + rx, cy - ry * kappa, cx + rx, cy);
+		c.quadTo(cx, cy + h * 0.2, cx - rx, cy);
+	};
+
+	mxRhombus.prototype.paintGlassEffectPath = function(c, x, y, w, h, sw, arc)
+	{
+		var hw = w / 2;
+		var hh = h / 2;
+		var arcSize = mxUtils.getValue(this.style, mxConstants.STYLE_ARCSIZE, mxConstants.LINE_ARCSIZE) / 2;
+
+		this.addPoints(c, [new mxPoint(x, y + hh), new mxPoint(x + hw, y), new mxPoint(x + w, y + hh)],
+			this.isRounded, arcSize, false);
+
+		c.quadTo(x + hw, y + h * 0.7, x, y + hh);
+	};
+
+	var mxEllipsePaintVertexShape = mxEllipse.prototype.paintVertexShape;
+	mxEllipse.prototype.paintVertexShape = function(c, x, y, w, h)
+	{
+		mxEllipsePaintVertexShape.apply(this, arguments);
+
+		if (this.glass && !this.outline && this.fill != null && this.fill != mxConstants.NONE)
+		{
+			this.paintGlassEffect(c, x, y, w, h, 0);
 		}
 	};
 
@@ -6505,8 +6586,8 @@
 				return new mxPoint(p0.x + nx * dist / 4 + ny * w / 2, p0.y + ny * dist / 4 - nx * w / 2);
 			}, function(dist, nx, ny, p0, p1, pt)
 			{
-				var w = Math.sqrt(mxUtils.ptSegDistSq(p0.x, p0.y, p1.x, p1.y, pt.x, pt.y));					
-				state.style['width'] = Math.round(w * 2) / state.view.scale - spacing;
+				var w = Math.sqrt(mxUtils.ptSegDistSq(p0.x, p0.y, p1.x, p1.y, pt.x, pt.y));
+				state.style['width'] = Math.round(Math.round(w * 2) / state.view.scale - spacing);
 			});
 		};
 		
@@ -6547,10 +6628,10 @@
 					{
 						var w = Math.sqrt(mxUtils.ptSegDistSq(p0.x, p0.y, p1.x, p1.y, pt.x, pt.y));
 						var l = mxUtils.ptLineDist(p0.x, p0.y, p0.x + ny, p0.y - nx, pt.x, pt.y);
-						
-						state.style[mxConstants.STYLE_STARTSIZE] = Math.round((l - state.shape.strokewidth) * 100 / 3) / 100 / state.view.scale;
-						state.style['width'] = Math.round(w * 2) / state.view.scale;
-						
+
+						state.style[mxConstants.STYLE_STARTSIZE] = Math.round((l - state.shape.strokewidth) / 3 / state.view.scale);
+						state.style['width'] = Math.round(w * 2 / state.view.scale);
+
 						// Applies to opposite side
 						if (mxEvent.isShiftDown(me.getEvent()) || mxEvent.isControlDown(me.getEvent()))
 						{
@@ -6578,10 +6659,10 @@
 					{
 						var w = Math.sqrt(mxUtils.ptSegDistSq(p0.x, p0.y, p1.x, p1.y, pt.x, pt.y));
 						var l = mxUtils.ptLineDist(p0.x, p0.y, p0.x + ny, p0.y - nx, pt.x, pt.y);
-						
-						state.style[mxConstants.STYLE_STARTSIZE] = Math.round((l - state.shape.strokewidth) * 100 / 3) / 100 / state.view.scale;
-						state.style['startWidth'] = Math.max(0, Math.round(w * 2) - state.shape.getEdgeWidth()) / state.view.scale;
-						
+
+						state.style[mxConstants.STYLE_STARTSIZE] = Math.round((l - state.shape.strokewidth) / 3 / state.view.scale);
+						state.style['startWidth'] = Math.round(Math.max(0, Math.round(w * 2) - state.shape.getEdgeWidth()) / state.view.scale);
+
 						// Applies to opposite side
 						if (mxEvent.isShiftDown(me.getEvent()) || mxEvent.isControlDown(me.getEvent()))
 						{
@@ -6618,16 +6699,16 @@
 					{
 						var w = Math.sqrt(mxUtils.ptSegDistSq(p0.x, p0.y, p1.x, p1.y, pt.x, pt.y));
 						var l = mxUtils.ptLineDist(p0.x, p0.y, p0.x + ny, p0.y - nx, pt.x, pt.y);
-						
-						state.style[mxConstants.STYLE_ENDSIZE] = Math.round((l - state.shape.strokewidth) * 100 / 3) / 100 / state.view.scale;
-						state.style['width'] = Math.round(w * 2) / state.view.scale;
-						
+
+						state.style[mxConstants.STYLE_ENDSIZE] = Math.round((l - state.shape.strokewidth) / 3 / state.view.scale);
+						state.style['width'] = Math.round(w * 2 / state.view.scale);
+
 						// Applies to opposite side
 						if (mxEvent.isShiftDown(me.getEvent()) || mxEvent.isControlDown(me.getEvent()))
 						{
 							state.style[mxConstants.STYLE_STARTSIZE] = state.style[mxConstants.STYLE_ENDSIZE];
 						}
-					
+
 						// Snaps to start geometry
 						if (!mxEvent.isAltDown(me.getEvent()))
 						{
@@ -6649,10 +6730,10 @@
 					{
 						var w = Math.sqrt(mxUtils.ptSegDistSq(p0.x, p0.y, p1.x, p1.y, pt.x, pt.y));
 						var l = mxUtils.ptLineDist(p0.x, p0.y, p0.x + ny, p0.y - nx, pt.x, pt.y);
-						
-						state.style[mxConstants.STYLE_ENDSIZE] = Math.round((l - state.shape.strokewidth) * 100 / 3) / 100 / state.view.scale;
-						state.style['endWidth'] = Math.max(0, Math.round(w * 2) - state.shape.getEdgeWidth()) / state.view.scale;
-						
+
+						state.style[mxConstants.STYLE_ENDSIZE] = Math.round((l - state.shape.strokewidth) / 3 / state.view.scale);
+						state.style['endWidth'] = Math.round(Math.max(0, Math.round(w * 2) - state.shape.getEdgeWidth()) / state.view.scale);
+
 						// Applies to opposite side
 						if (mxEvent.isShiftDown(me.getEvent()) || mxEvent.isControlDown(me.getEvent()))
 						{

@@ -499,8 +499,8 @@ App.getStoredMode = function()
 						navigator.userAgent.indexOf('MSIE') < 0 || document.documentMode >= 10))
 					{
 						// Immediately loads client
-						if (App.mode == App.MODE_ONEDRIVE || (window.location.hash != null &&
-							window.location.hash.substring(0, 2) == '#W'))
+						if (App.mode == App.MODE_ONEDRIVE || App.mode == App.MODE_M365 || (window.location.hash != null &&
+							(window.location.hash.substring(0, 2) == '#W' || window.location.hash.substring(0, 2) == '#M')))
 						{
 							//Editor.oneDriveInlinePicker can be set with configuration which is done later, so load it all time
 							mxscript(App.ONEDRIVE_URL);

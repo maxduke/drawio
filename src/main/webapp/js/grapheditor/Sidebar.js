@@ -1214,7 +1214,8 @@ Sidebar.prototype.searchEntries = function(searchTerms, count, page, success, er
 		}
 
 		var len = results.length;
-		success(results.slice(page * count, (page + 1) * count), len, false, tmp);
+		var more = (page + 1) * count < len;
+		success(results.slice(page * count, (page + 1) * count), len, more, tmp);
 	}
 	else
 	{

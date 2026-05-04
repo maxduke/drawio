@@ -3272,30 +3272,6 @@
 		};
 
 		/**
-		 * Returns the accumulated transform from an element up to the SVG root
-		 * as a transform attribute string, or null if no transforms exist.
-		 */
-		function getAccumulatedTransform(el, svgRoot)
-		{
-			var transforms = [];
-			var current = el;
-
-			while (current != null && current !== svgRoot && current.nodeType === 1)
-			{
-				var t = current.getAttribute('transform');
-
-				if (t != null && t.length > 0)
-				{
-					transforms.unshift(t);
-				}
-
-				current = current.parentNode;
-			}
-
-			return (transforms.length > 0) ? transforms.join(' ') : null;
-		};
-
-		/**
 		 * Resolves a fill URL reference to a pattern element.
 		 */
 		function resolvePattern(el, svgRoot)
@@ -3361,42 +3337,18 @@
 
 			var t = parsePatternTransform(pattern.getAttribute('patternTransform'));
 
-			// Get the element's accumulated transform for the clip path
-			var elemTransform = getAccumulatedTransform(el, svgRoot);
-
-			// Compute bbox corners in user space (relative to element's local coords)
+			// Bbox is already in the element's user coordinate system, which is
+			// the space the pattern's userSpaceOnUse references. Do not apply the
+			// element's CTM — that would shift coordinates into SVG viewport space
+			// and miscompute the tile range whenever an ancestor group has a
+			// transform (notably the print preview's CSS-transform scale+translate
+			// when crop or fit is enabled).
 			var corners = [
 				{x: bbox.x, y: bbox.y},
 				{x: bbox.x + bbox.width, y: bbox.y},
 				{x: bbox.x + bbox.width, y: bbox.y + bbox.height},
 				{x: bbox.x, y: bbox.y + bbox.height}
 			];
-
-			// If the element has a transform, apply it to get coordinates in
-			// the same space as the pattern (user/diagram space)
-			if (elemTransform != null)
-			{
-				try
-				{
-					var ctm = el.getCTM();
-					var svgCtm = svgRoot.getCTM() || svgRoot.createSVGMatrix();
-					// Transform from element space to SVG space
-					var m = svgCtm.inverse().multiply(ctm);
-
-					for (var i = 0; i < corners.length; i++)
-					{
-						var pt = svgRoot.createSVGPoint();
-						pt.x = corners[i].x;
-						pt.y = corners[i].y;
-						pt = pt.matrixTransform(m);
-						corners[i] = {x: pt.x, y: pt.y};
-					}
-				}
-				catch (e)
-				{
-					// Fall back to untransformed corners
-				}
-			}
 
 			// Transform corners to pattern space (inverse of patternTransform)
 			var minX = Infinity, minY = Infinity;
@@ -6048,7 +6000,6 @@
 			var sstate = this.editorUi.getSelectionState();
 
 			if (this.defaultColorSchemes != null && this.defaultColorSchemes.length > 0 &&
-				sstate.style.shape != 'image' && !sstate.containsLabel &&
 				sstate.cells.length > 0)
 			{
 				this.container.appendChild(this.addStyles(this.createPanel()));
@@ -6924,10 +6875,39 @@
 							try
 							{
 								var cells = ui.getSelectionState().cells;
-								
+								var model = graph.getModel();
+								var cellMeta = [];
+								var labelOnly = cells.length > 0;
+
 								for (var i = 0; i < cells.length; i++)
 								{
-									var style = graph.getModel().getStyle(cells[i]);
+									var isEdgeLabel = model.isVertex(cells[i]) &&
+										model.isEdge(model.getParent(cells[i]));
+									var cellStyle = graph.getCellStyle(cells[i]);
+									var isImage = cellStyle != null && cellStyle.shape == 'image';
+									cellMeta.push({isEdgeLabel: isEdgeLabel, isImage: isImage});
+
+									if (!isEdgeLabel && !isImage)
+									{
+										labelOnly = false;
+									}
+								}
+
+								var fillKey = labelOnly ? mxConstants.STYLE_LABEL_BACKGROUNDCOLOR :
+									mxConstants.STYLE_FILLCOLOR;
+								var strokeKey = labelOnly ? mxConstants.STYLE_LABEL_BORDERCOLOR :
+									mxConstants.STYLE_STROKECOLOR;
+
+								for (var i = 0; i < cells.length; i++)
+								{
+									var meta = cellMeta[i];
+
+									if (!labelOnly && (meta.isEdgeLabel || meta.isImage))
+									{
+										continue;
+									}
+
+									var style = model.getStyle(cells[i]);
 
 									if (style != null && typeof style !== 'string')
 									{
@@ -6940,24 +6920,27 @@
 										{
 											if (colorset['fill'] == '' || colorset['fill'] == null)
 											{
-												style = mxUtils.setStyle(style, mxConstants.STYLE_FILLCOLOR, null);
+												style = mxUtils.setStyle(style, fillKey, null);
 											}
 											else
 											{
-												style = mxUtils.setStyle(style, mxConstants.STYLE_FILLCOLOR, colorset['fill']);
+												style = mxUtils.setStyle(style, fillKey, colorset['fill']);
 											}
 
-											if (colorset['gradient'] == '' || colorset['gradient'] == null)
+											if (!labelOnly)
 											{
-												style = mxUtils.setStyle(style, mxConstants.STYLE_GRADIENTCOLOR, null);
-											}
-											else
-											{
-												style = mxUtils.setStyle(style, mxConstants.STYLE_GRADIENTCOLOR, colorset['gradient']);
+												if (colorset['gradient'] == '' || colorset['gradient'] == null)
+												{
+													style = mxUtils.setStyle(style, mxConstants.STYLE_GRADIENTCOLOR, null);
+												}
+												else
+												{
+													style = mxUtils.setStyle(style, mxConstants.STYLE_GRADIENTCOLOR, colorset['gradient']);
+												}
 											}
 
 											if (!mxEvent.isControlDown(evt) && (!mxClient.IS_MAC || !mxEvent.isMetaDown(evt)) &&
-												graph.getModel().isVertex(cells[i]))
+												model.isVertex(cells[i]))
 											{
 												if (colorset['font'] == '' || colorset['font'] == null)
 												{
@@ -6969,32 +6952,36 @@
 												}
 											}
 										}
-										
+
 										if (!mxEvent.isAltDown(evt))
 										{
 											if (colorset['stroke'] == '' || colorset['stroke'] == null)
 											{
-												style = mxUtils.setStyle(style, mxConstants.STYLE_STROKECOLOR, null);
+												style = mxUtils.setStyle(style, strokeKey, null);
 											}
 											else
 											{
-												style = mxUtils.setStyle(style, mxConstants.STYLE_STROKECOLOR, colorset['stroke']);
+												style = mxUtils.setStyle(style, strokeKey, colorset['stroke']);
 											}
 										}
 									}
 									else
 									{
-										style = mxUtils.setStyle(style, mxConstants.STYLE_FILLCOLOR, null);
-										style = mxUtils.setStyle(style, mxConstants.STYLE_STROKECOLOR, null);
-										style = mxUtils.setStyle(style, mxConstants.STYLE_GRADIENTCOLOR, null);
-										
-										if (graph.getModel().isVertex(cells[i]))
+										style = mxUtils.setStyle(style, fillKey, null);
+										style = mxUtils.setStyle(style, strokeKey, null);
+
+										if (!labelOnly)
+										{
+											style = mxUtils.setStyle(style, mxConstants.STYLE_GRADIENTCOLOR, null);
+										}
+
+										if (model.isVertex(cells[i]))
 										{
 											style = mxUtils.setStyle(style, mxConstants.STYLE_FONTCOLOR, null);
 										}
 									}
 
-									graph.getModel().setStyle(cells[i], style);
+									model.setStyle(cells[i], style);
 								}
 							}
 							finally
@@ -9597,16 +9584,14 @@
 		allPagesRadio.style.marginRight = '8px';
 		allPagesRadio.setAttribute('type', 'radio');
 		allPagesRadio.setAttribute('name', 'pages-printdialog');
+		allPagesRadio.setAttribute('id', 'gePrintDlgAllPages');
 
 		var allPagesRow = document.createElement('div');
 		allPagesRow.className = 'geDialogCheckRow';
 		allPagesRow.appendChild(allPagesRadio);
-		var span = document.createElement('span');
+		var span = document.createElement('label');
+		span.setAttribute('for', 'gePrintDlgAllPages');
 		mxUtils.write(span, mxResources.get('allPages'));
-		mxEvent.addListener(span, 'click', function()
-		{
-			allPagesRadio.checked = true;
-		});
 		allPagesRow.appendChild(span);
 		pagesSection.appendChild(allPagesRow);
 
@@ -9615,18 +9600,16 @@
 		pagesRadio.style.marginRight = '8px';
 		pagesRadio.setAttribute('type', 'radio');
 		pagesRadio.setAttribute('name', 'pages-printdialog');
+		pagesRadio.setAttribute('id', 'gePrintDlgPages');
 
 		var pagesRow = document.createElement('div');
 		pagesRow.className = 'geDialogCheckRow';
 		pagesRow.appendChild(pagesRadio);
 
-		var span = document.createElement('span');
+		var span = document.createElement('label');
+		span.setAttribute('for', 'gePrintDlgPages');
 		mxUtils.write(span, mxResources.get('pages') + ':');
 		pagesRow.appendChild(span);
-		mxEvent.addListener(span, 'click', function()
-		{
-			pagesRadio.checked = true;
-		});
 
 		var pagesFromInput = document.createElement('input');
 		pagesFromInput.style.margin = '0 4px';
@@ -9727,6 +9710,7 @@
 		var selectionOnlyRadio = document.createElement('input');
 		selectionOnlyRadio.setAttribute('name', 'pages-printdialog');
 		selectionOnlyRadio.setAttribute('type', (pageCount == 1) ? 'checkbox' : 'radio');
+		selectionOnlyRadio.setAttribute('id', 'gePrintDlgSelectionOnly');
 		selectionOnlyRadio.style.marginRight = '8px';
 
 		if (graph.isSelectionEmpty())
@@ -9738,7 +9722,8 @@
 		{
 			selectionSection.appendChild(selectionOnlyRadio);
 
-			var span = document.createElement('span');
+			var span = document.createElement('label');
+			span.setAttribute('for', 'gePrintDlgSelectionOnly');
 			mxUtils.write(span, mxResources.get('selectionOnly'));
 			selectionSection.appendChild(span);
 		}
@@ -9771,14 +9756,6 @@
 			allPagesRadio.checked = true;
 		}
 
-		if (!graph.isSelectionEmpty())
-		{
-			mxEvent.addListener(span, 'click', function()
-			{
-				selectionOnlyRadio.checked = !selectionOnlyRadio.checked;
-			});
-		}
-		
 		// --- Size section ---
 		var sizeSection = document.createElement('div');
 		sizeSection.className = 'geDialogSection';
@@ -9791,9 +9768,11 @@
 		pageViewRadio.style.marginRight = '8px';
 		pageViewRadio.setAttribute('type', 'radio');
 		pageViewRadio.setAttribute('name', 'printSize');
+		pageViewRadio.setAttribute('id', 'gePrintDlgPageView');
 		pageViewSection.appendChild(pageViewRadio);
 
-		var span = document.createElement('span');
+		var span = document.createElement('label');
+		span.setAttribute('for', 'gePrintDlgPageView');
 		mxUtils.write(span, mxResources.get('pageView'));
 		pageViewSection.appendChild(span);
 		mxEvent.addListener(pageViewSection, 'click', function()
@@ -9811,9 +9790,11 @@
 		cropRadio.style.marginRight = '8px';
 		cropRadio.setAttribute('type', 'radio');
 		cropRadio.setAttribute('name', 'printSize');
+		cropRadio.setAttribute('id', 'gePrintDlgCrop');
 		cropSection.appendChild(cropRadio);
 
-		var span = document.createElement('span');
+		var span = document.createElement('label');
+		span.setAttribute('for', 'gePrintDlgCrop');
 		mxUtils.write(span, mxResources.get('crop'));
 		cropSection.appendChild(span);
 		mxEvent.addListener(cropSection, 'click', function()
@@ -9935,24 +9916,28 @@
 
 		var borderLabel = document.createElement('label');
 		borderLabel.className = 'geDialogFormLabel';
+		borderLabel.setAttribute('for', 'gePrintDlgBorder');
 		mxUtils.write(borderLabel, mxResources.get('borderWidth'));
 		borderZoomRow.appendChild(borderLabel);
 
 		var borderInput = document.createElement('input');
 		borderInput.setAttribute('type', 'number');
 		borderInput.setAttribute('min', '0');
+		borderInput.setAttribute('id', 'gePrintDlgBorder');
 		borderInput.style.width = '40px';
 		borderInput.value = (editorUi.lastPrintBorder != null) ?
 			editorUi.lastPrintBorder : mxPrintPreview.prototype.pageMargin;
 		borderZoomRow.appendChild(borderInput);
 
 		var zoomLabel = document.createElement('label');
+		zoomLabel.setAttribute('for', 'gePrintDlgZoom');
 		zoomLabel.style.marginLeft = '12px';
 		zoomLabel.style.marginRight = '4px';
 		mxUtils.write(zoomLabel, mxResources.get('zoom'));
 		borderZoomRow.appendChild(zoomLabel);
 
 		var zoomInput = document.createElement('input');
+		zoomInput.setAttribute('id', 'gePrintDlgZoom');
 		zoomInput.style.width = '60px';
 		zoomInput.value = (editorUi.lastPrintZoom != null) ?
 			editorUi.lastPrintZoom : '100%';
@@ -9966,20 +9951,16 @@
 
 		var gridInput = document.createElement('input');
 		gridInput.setAttribute('type', 'checkbox');
+		gridInput.setAttribute('id', 'gePrintDlgGrid');
 		gridInput.style.marginRight = '8px';
 		gridInput.checked = (editorUi.lastPrintGrid != null) ?
 			editorUi.lastPrintGrid : false;
 		gridRow.appendChild(gridInput);
 
-		var span = document.createElement('span');
+		var span = document.createElement('label');
+		span.setAttribute('for', 'gePrintDlgGrid');
 		mxUtils.write(span, mxResources.get('grid'));
 		gridRow.appendChild(span);
-
-		mxEvent.addListener(span, 'click', function(e)
-		{
-			gridInput.checked = true;
-			mxEvent.consume(e);
-		});
 
 		optionsSection.appendChild(gridRow);
 
@@ -9989,29 +9970,22 @@
 
 		var shadowsInput = document.createElement('input');
 		shadowsInput.setAttribute('type', 'checkbox');
+		shadowsInput.setAttribute('id', 'gePrintDlgShadows');
 		shadowsInput.style.marginRight = '8px';
 		shadowsInput.checked = (editorUi.lastPrintShadow != null) ?
 			editorUi.lastPrintShadow : false;
 		shadowsRow.appendChild(shadowsInput);
 
-		var span = document.createElement('span');
+		var span = document.createElement('label');
+		span.setAttribute('for', 'gePrintDlgShadows');
 		mxUtils.write(span, mxResources.get('shadows'));
 		shadowsRow.appendChild(span);
 
 		if (!editorUi.isOffline() || mxClient.IS_CHROMEAPP)
 		{
-			span.appendChild(editorUi.createHelpIcon(
+			shadowsRow.appendChild(editorUi.createHelpIcon(
 				'https://github.com/jgraph/drawio/discussions/5136'));
 		}
-
-		mxEvent.addListener(span, 'click', function(e)
-		{
-			if (mxEvent.getSource(e).nodeName != 'IMG')
-			{
-				shadowsInput.checked = true;
-				mxEvent.consume(e);
-			}
-		});
 
 		// Hides shadows option if not supported
 		if (!Editor.enableShadowOption)
@@ -10024,6 +9998,7 @@
 		// Transparent background
 		var transparentInput = document.createElement('input');
 		transparentInput.setAttribute('type', 'checkbox');
+		transparentInput.setAttribute('id', 'gePrintDlgTransparent');
 		transparentInput.style.marginRight = '8px';
 		transparentInput.checked = (editorUi.lastPrintTransparent != null) ?
 			editorUi.lastPrintTransparent : false;
@@ -10035,15 +10010,10 @@
 			transparentRow.className = 'geDialogCheckRow';
 			transparentRow.appendChild(transparentInput);
 
-			var span = document.createElement('span');
+			var span = document.createElement('label');
+			span.setAttribute('for', 'gePrintDlgTransparent');
 			mxUtils.write(span, mxResources.get('transparentBackground'));
 			transparentRow.appendChild(span);
-
-			mxEvent.addListener(span, 'click', function(e)
-			{
-				transparentInput.checked = true;
-				mxEvent.consume(e);
-			});
 
 			optionsSection.appendChild(transparentRow);
 		}
@@ -10051,6 +10021,7 @@
 		// Include diagram
 		var includeInput = document.createElement('input');
 		includeInput.setAttribute('type', 'checkbox');
+		includeInput.setAttribute('id', 'gePrintDlgInclude');
 		includeInput.style.marginRight = '8px';
 		includeInput.checked = (editorUi.lastPrintInclude != null) ?
 			editorUi.lastPrintInclude : Editor.defaultIncludeDiagram;
@@ -10062,15 +10033,10 @@
 			includeRow.className = 'geDialogCheckRow';
 			includeRow.appendChild(includeInput);
 
-			var span = document.createElement('span');
+			var span = document.createElement('label');
+			span.setAttribute('for', 'gePrintDlgInclude');
 			mxUtils.write(span, mxResources.get('includeCopyOfMyDiagram'));
 			includeRow.appendChild(span);
-
-			mxEvent.addListener(span, 'click', function(e)
-			{
-				includeInput.checked = true;
-				mxEvent.consume(e);
-			});
 
 			optionsSection.appendChild(includeRow);
 		}

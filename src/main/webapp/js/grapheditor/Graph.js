@@ -4265,10 +4265,10 @@ Graph.prototype.destroy = function()
 	Graph.prototype.isGlassState = function(state)
 	{
 		var shape = mxUtils.getValue(state.style, mxConstants.STYLE_SHAPE, null);
-		
+
 		return (shape == 'label' || shape == 'rectangle' || shape == 'internalStorage' ||
 				shape == 'ext' || shape == 'umlLifeline' || shape == 'swimlane' ||
-				shape == 'process');
+				shape == 'process' || shape == 'ellipse' || shape == 'rhombus');
 	};
 	
 	/**
@@ -15312,51 +15312,79 @@ if (typeof mxVertexHandler !== 'undefined')
 					var rows = model.getChildCells(table, true);
 					row = rows[(before) ? 0 : rows.length - 1];
 				}
-				
-				var cells = model.getChildCells(row, true);
-				var index = table.getIndex(row);
-				row = model.cloneCell(row, false);
-				row.value = null;
-				
-				var rowGeo = this.getCellGeometry(row);
-				
-				if (rowGeo != null)
+
+				if (row != null)
 				{
-					for (var i = 0; i < cells.length; i++)
+					var cells = model.getChildCells(row, true);
+					var index = table.getIndex(row);
+					row = model.cloneCell(row, false);
+					row.value = null;
+
+					var rowGeo = this.getCellGeometry(row);
+
+					if (rowGeo != null)
 					{
-						var cell = model.cloneCell(cells[i], false);
-
-						// Removes value, col/rowspan and alternate bounds
-						cell.value = null;
-						cell.style = mxUtils.setStyle(mxUtils.setStyle(
-							cell.style, 'rowspan', null), 'colspan', null);
-
-						var geo = this.getCellGeometry(cell);
-						
-						if (geo != null)
+						for (var i = 0; i < cells.length; i++)
 						{
-							if (geo.alternateBounds != null)
+							var cell = model.cloneCell(cells[i], false);
+
+							// Removes value, col/rowspan and alternate bounds
+							cell.value = null;
+							cell.style = mxUtils.setStyle(mxUtils.setStyle(
+								cell.style, 'rowspan', null), 'colspan', null);
+
+							var geo = this.getCellGeometry(cell);
+
+							if (geo != null)
 							{
-								geo.width = geo.alternateBounds.width;
-								geo.height = geo.alternateBounds.height;
-								geo.alternateBounds = null;
+								if (geo.alternateBounds != null)
+								{
+									geo.width = geo.alternateBounds.width;
+									geo.height = geo.alternateBounds.height;
+									geo.alternateBounds = null;
+								}
+
+								geo.height = rowGeo.height;
 							}
 
-							geo.height = rowGeo.height;
+							row.insert(cell);
 						}
-						
-						row.insert(cell);
-					}
 
-					model.add(table, row, index + ((before) ? 0 : 1));
-					
+						model.add(table, row, index + ((before) ? 0 : 1));
+
+						var tableGeo = this.getCellGeometry(table);
+
+						if (tableGeo != null)
+						{
+							tableGeo = tableGeo.clone();
+							tableGeo.height += rowGeo.height;
+
+							model.setGeometry(table, tableGeo);
+						}
+					}
+				}
+				else
+				{
+					// Empty table: insert initial row with a single column
 					var tableGeo = this.getCellGeometry(table);
-					
+
 					if (tableGeo != null)
 					{
+						var rowHeight = 40;
+						var rowWidth = tableGeo.width;
+
+						var rowStyle = 'shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;strokeColor=inherit;' +
+							'top=0;left=0;bottom=0;right=0;collapsible=0;dropTarget=0;fillColor=none;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fixedHeader=1;';
+						var cellStyle = 'shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;strokeColor=inherit;' +
+							'overflow=hidden;fillColor=none;top=0;left=0;bottom=0;right=0;pointerEvents=1;';
+
+						row = this.createVertex(null, null, '', 0, 0, rowWidth, rowHeight, rowStyle);
+						row.insert(this.createVertex(null, null, '', 0, 0, rowWidth, rowHeight, cellStyle));
+
+						model.add(table, row);
+
 						tableGeo = tableGeo.clone();
-						tableGeo.height += rowGeo.height;
-						
+						tableGeo.height += rowHeight;
 						model.setGeometry(table, tableGeo);
 					}
 				}
@@ -15366,9 +15394,9 @@ if (typeof mxVertexHandler !== 'undefined')
 				model.endUpdate();
 			}
 		};
-	
+
 		/**
-		 * 
+		 *
 		 */
 		Graph.prototype.deleteTableColumn = function(cell)
 		{

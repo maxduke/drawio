@@ -321,7 +321,7 @@
 			editorUi.getPublicUrl(editorUi.getCurrentFile(), function(url)
 			{
 				var dlg = new FilePropertiesDialog(editorUi, url);
-				editorUi.showDialog(dlg.container, 340, 200, true, true);
+				editorUi.showDialog(dlg.container, 360, null, true, true);
 				dlg.init();
 			});
 		}).isEnabled = isGraphEnabled;
@@ -5919,8 +5919,7 @@
 						}
 					}
 				}));
-				this.editorUi.showDialog(dlg.container, 380, 
-					130 + (Editor.enableWebFonts ? 70 : 0) + (urlParams['isGoogleFontsEnabled'] != '0'? 50 : 0), true, true);
+				this.editorUi.showDialog(dlg.container, 380, null, true, true);
 				dlg.init();
 			}), parent, null, true);
 		})));

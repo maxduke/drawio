@@ -2414,12 +2414,13 @@ PageSetupDialog.addPageFormatPanel = function(div, namePostfix, pageFormat, page
 	paperSizeSelect.style.width = '210px';
 
 	var formatDiv = document.createElement('div');
+	formatDiv.style.alignItems = 'center';
 	formatDiv.style.whiteSpace = 'nowrap';
 	formatDiv.style.marginLeft = '4px';
 	formatDiv.style.width = '210px';
 	formatDiv.style.height = '24px';
 
-	portraitCheckBox.style.marginRight = '6px';
+	portraitCheckBox.style.margin = '0 6px 0 0';
 	formatDiv.appendChild(portraitCheckBox);
 	
 	var portraitSpan = document.createElement('span');
@@ -2427,8 +2428,7 @@ PageSetupDialog.addPageFormatPanel = function(div, namePostfix, pageFormat, page
 	mxUtils.write(portraitSpan, mxResources.get('portrait'));
 	formatDiv.appendChild(portraitSpan);
 
-	landscapeCheckBox.style.marginLeft = '10px';
-	landscapeCheckBox.style.marginRight = '6px';
+	landscapeCheckBox.style.margin = '0 6px 0 10px';
 	formatDiv.appendChild(landscapeCheckBox);
 	
 	var landscapeSpan = document.createElement('span');
@@ -2565,7 +2565,7 @@ PageSetupDialog.addPageFormatPanel = function(div, namePostfix, pageFormat, page
 		}
 		else
 		{
-			formatDiv.style.display = '';
+			formatDiv.style.display = 'flex';
 			customDiv.style.display = 'none';
 		}
 	};
@@ -2589,7 +2589,7 @@ PageSetupDialog.addPageFormatPanel = function(div, namePostfix, pageFormat, page
 				f.format.height : f.format.width, unitSelect.value);
 
 			customDiv.style.display = 'none';
-			formatDiv.style.display = '';
+			formatDiv.style.display = 'flex';
 		}
 		else
 		{
