@@ -473,9 +473,85 @@
 	EditorUi.prototype.emptyDiagramXml = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>';
 
 	/**
-	 * 
+	 *
 	 */
 	EditorUi.prototype.emptyLibraryXml = '<mxlibrary>[]</mxlibrary>';
+
+	/**
+	 * Returns true if the given file data contains no user-added cells —
+	 * i.e. every page has just the root cell (id=0) and the default layer
+	 * (id=1) with no children. Used to suppress storing empty drafts.
+	 */
+	EditorUi.prototype.isDiagramDataEmpty = function(data)
+	{
+		if (data == null || data.length == 0 || data == this.emptyDiagramXml)
+		{
+			return true;
+		}
+
+		try
+		{
+			var doc = mxUtils.parseXml(data);
+			var root = doc.documentElement;
+
+			var checkModel = function(modelNode)
+			{
+				return modelNode == null ||
+					modelNode.getElementsByTagName('mxCell').length <= 2;
+			};
+
+			if (root.nodeName == 'mxGraphModel')
+			{
+				return checkModel(root);
+			}
+
+			if (root.nodeName == 'mxfile')
+			{
+				var diagrams = root.getElementsByTagName('diagram');
+
+				if (diagrams.length == 0)
+				{
+					return true;
+				}
+
+				for (var i = 0; i < diagrams.length; i++)
+				{
+					var models = diagrams[i].getElementsByTagName('mxGraphModel');
+
+					if (models.length > 0)
+					{
+						if (!checkModel(models[0])) return false;
+					}
+					else
+					{
+						// Compressed diagram payload — decompress and re-check
+						var text = mxUtils.getNodeValue(diagrams[i]);
+
+						if (text != null && text.length > 0)
+						{
+							var decompressed = Graph.decompress(text);
+
+							if (decompressed != null && decompressed.length > 0)
+							{
+								var modelDoc = mxUtils.parseXml(decompressed);
+
+								if (!checkModel(modelDoc.documentElement)) return false;
+							}
+						}
+					}
+				}
+
+				return true;
+			}
+		}
+		catch (e)
+		{
+			// Unparseable data — treat as non-empty so we don't drop a
+			// draft the user might still recover by hand.
+		}
+
+		return false;
+	};
 
 	/**
 	 * Sets the delay for autosave in milliseconds. Default is 2000.
@@ -10129,6 +10205,133 @@
 	};
 
 	/**
+	 * Replaces the children of a locked-group Mermaid cell with the result of
+	 * a fresh parse. The parsed XML is expected to carry a single wrapper
+	 * vertex; its children become the new children of `cell`. The cell is
+	 * resized to the new content bounds (preserving top-left) and the
+	 * mermaidData attribute is updated to match the new source.
+	 */
+	EditorUi.prototype.replaceLockedGroupChildren = function(cell, xml, text, config)
+	{
+		var graph = this.editor.graph;
+		var doc = mxUtils.parseXml(xml);
+		var codec = new mxCodec(doc);
+		var tempModel = new mxGraphModel();
+		codec.decode(doc.documentElement, tempModel);
+
+		// Locate wrapper: first vertex under a layer that has children.
+		var tempRoot = tempModel.getRoot();
+		var wrapper = null;
+
+		if (tempRoot != null)
+		{
+			for (var i = 0; i < tempModel.getChildCount(tempRoot) && wrapper == null; i++)
+			{
+				var layer = tempModel.getChildAt(tempRoot, i);
+
+				for (var j = 0; j < tempModel.getChildCount(layer); j++)
+				{
+					var c = tempModel.getChildAt(layer, j);
+
+					if (tempModel.isVertex(c) && tempModel.getChildCount(c) > 0)
+					{
+						wrapper = c;
+						break;
+					}
+				}
+			}
+		}
+
+		if (wrapper == null)
+		{
+			return;
+		}
+
+		// Collect wrapper's children and compute content bounds.
+		var tempChildren = [];
+		var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+		for (var i = 0; i < tempModel.getChildCount(wrapper); i++)
+		{
+			var c = tempModel.getChildAt(wrapper, i);
+			tempChildren.push(c);
+
+			if (tempModel.isVertex(c))
+			{
+				var g = c.getGeometry();
+
+				if (g != null)
+				{
+					minX = Math.min(minX, g.x);
+					minY = Math.min(minY, g.y);
+					maxX = Math.max(maxX, g.x + g.width);
+					maxY = Math.max(maxY, g.y + g.height);
+				}
+			}
+		}
+
+		if (tempChildren.length == 0)
+		{
+			return;
+		}
+
+		// Clone for the live graph (fresh IDs, edges remapped to clones).
+		var liveChildren = graph.cloneCells(tempChildren, true);
+
+		graph.getModel().beginUpdate();
+		try
+		{
+			// Remove existing children of the locked group.
+			var childCount = graph.model.getChildCount(cell);
+
+			for (var j = childCount - 1; j >= 0; j--)
+			{
+				graph.model.remove(graph.model.getChildAt(cell, j));
+			}
+
+			// Shift child geometries so the content origin sits at (0, 0)
+			// inside the group, then add them.
+			var dx = isFinite(minX) ? minX : 0;
+			var dy = isFinite(minY) ? minY : 0;
+
+			for (var i = 0; i < liveChildren.length; i++)
+			{
+				var lc = liveChildren[i];
+
+				if (graph.model.isVertex(lc) && lc.geometry != null)
+				{
+					lc.geometry = lc.geometry.clone();
+					lc.geometry.x -= dx;
+					lc.geometry.y -= dy;
+				}
+
+				graph.model.add(cell, lc);
+			}
+
+			// Resize the group to the new content bounds, preserving top-left.
+			if (isFinite(maxX - minX) && isFinite(maxY - minY))
+			{
+				var geo = graph.model.getGeometry(cell);
+
+				if (geo != null)
+				{
+					geo = geo.clone();
+					geo.width = maxX - minX;
+					geo.height = maxY - minY;
+					graph.model.setGeometry(cell, geo);
+				}
+			}
+
+			graph.setAttributeForCell(cell, 'mermaidData',
+				JSON.stringify({data: text, config: config}, null, 2));
+		}
+		finally
+		{
+			graph.getModel().endUpdate();
+		}
+	};
+
+	/**
 	 * Generates a Mermaid image.
 	 */
 	EditorUi.prototype.getSvgForXml = function(xml)
@@ -12379,48 +12582,79 @@
 			dlg.init();
 		};
 		
-		// Starts editing Mermaid data
+		// Starts editing Mermaid data. Branches on the current cell's shape:
+		// - shape=image: legacy image path (regenerate SVG via generateMermaidImage)
+		// - otherwise:   native subgraph path (re-parse and replace children)
 		graph.cellEditor.editMermaidData = function(cell, trigger, data)
 		{
 			var obj = JSON.parse(data);
-			
+			var style = graph.getCurrentCellStyle(cell);
+			var isImage = mxUtils.getValue(style, mxConstants.STYLE_SHAPE, '') ==
+				mxConstants.SHAPE_IMAGE;
+
 	    	var dlg = new SimpleTextareaDialog(ui, obj.data, function(text)
 			{
-	    		if (text != null)
+	    		if (text == null)
 				{
-	    			if (ui.spinner.spin(document.body, mxResources.get('inserting')))
-	    			{
-	    				ui.generateMermaidImage(text, obj.config, function(data, w, h)
-	    				{
-	    					ui.spinner.stop();
+	    			return;
+				}
 
-	    					graph.getModel().beginUpdate();
-	    					try
+	    		if (!ui.spinner.spin(document.body, mxResources.get('inserting')))
+	    		{
+	    			return;
+				}
+
+	    		var onError = function(e)
+	    		{
+	    			ui.spinner.stop();
+	    			ui.handleError(e);
+	    		};
+
+	    		if (isImage)
+				{
+	    			ui.generateMermaidImage(text, obj.config, function(imageData, w, h)
+	    			{
+	    				ui.spinner.stop();
+
+	    				graph.getModel().beginUpdate();
+	    				try
+	    				{
+	    					graph.setCellStyles('image', imageData, [cell]);
+	    					var geo = graph.model.getGeometry(cell);
+
+	    					if (geo != null)
 	    					{
-	    						graph.setCellStyles('image', data, [cell]);
-    							var geo = graph.model.getGeometry(cell);
-    							
-    							if (geo != null)
-    							{
-    								geo = geo.clone();
-    								geo.width = Math.max(geo.width, w);
-    								geo.height = Math.max(geo.height, h);
-    								graph.cellsResized([cell], [geo], false);
-    							}
-	    						
-	    						graph.setAttributeForCell(cell, 'mermaidData',
-		    						JSON.stringify({data: text, config:
-		    						obj.config}, null, 2));
+	    						geo = geo.clone();
+	    						geo.width = Math.max(geo.width, w);
+	    						geo.height = Math.max(geo.height, h);
+	    						graph.cellsResized([cell], [geo], false);
 	    					}
-	    					finally
-	    					{
-	    						graph.getModel().endUpdate();
-	    					}
-	    				}, function(e)
+
+	    					graph.setAttributeForCell(cell, 'mermaidData',
+	    						JSON.stringify({data: text, config:
+	    						obj.config}, null, 2));
+	    				}
+	    				finally
+	    				{
+	    					graph.getModel().endUpdate();
+	    				}
+	    			}, onError);
+				}
+	    		else
+				{
+	    			ui.parseMermaidDiagram(text, obj.config, function(xml)
+	    			{
+	    				ui.spinner.stop();
+
+	    				try
+	    				{
+	    					ui.replaceLockedGroupChildren(cell, xml, text, obj.config);
+	    				}
+	    				catch (e)
 	    				{
 	    					ui.handleError(e);
-	    				});
-	    			}
+	    				}
+	    			}, onError, null, true);
 				}
 			});
 			ui.showDialog(dlg.container, 640, 420, true, true, null,
@@ -12430,12 +12664,22 @@
 		
 		// Overrides function to add editing for Plant UML.
 		var cellEditorStartEditing = graph.cellEditor.startEditing;
-		graph.cellEditor.startEditing = function(cell, trigger)
+		graph.cellEditor.startEditing = function(cell, trigger, initialText)
 		{
 			try
 			{
+				// When the enclosing group is actively locked, double-click
+				// on any item in the group (or the group itself) edits the
+				// group. Unlocked groups let children be edited individually.
+				var lockedAncestor = this.graph.getLockedGroupAncestor(cell);
+
+				if (lockedAncestor != null)
+				{
+					cell = lockedAncestor;
+				}
+
 				var data = this.graph.getAttributeForCell(cell, 'plantUmlData');
-				
+
 				if (data != null)
 				{
 					this.editPlantUmlData(cell, trigger, data);
@@ -12443,7 +12687,7 @@
 				else
 				{
 					data = this.graph.getAttributeForCell(cell, 'mermaidData');
-				
+
 					if (data != null && window.isMermaidEnabled)
 					{
 						this.editMermaidData(cell, trigger, data);
@@ -12451,14 +12695,14 @@
 					else
 					{
 						var style = graph.getCellStyle(cell);
-						
+
 						if (mxUtils.getValue(style, 'metaEdit', '0') == '1')
 						{
 							ui.showDataDialog(cell);
 						}
 						else
 						{
-							cellEditorStartEditing.apply(this, arguments);
+							cellEditorStartEditing.call(this, cell, trigger, initialText);
 						}
 					}
 				}
@@ -14544,13 +14788,19 @@
 	{
 		var wnd = wrapperWindow.window;
 
+		// When minimized, div height reflects the title bar; mxWindow stores
+		// the pre-minimize height in wnd.height for use on normalize.
+		var h = (wnd.minimized && wnd.height != null) ?
+			parseInt(wnd.height) : parseInt(wnd.div.style.height);
+
 		mxSettings.setWindowState(name,
 		{
 			x: wnd.getX(),
 			y: wnd.getY(),
 			w: parseInt(wnd.div.style.width),
-			h: parseInt(wnd.div.style.height),
+			h: h,
 			visible: wnd.isVisible(),
+			minimized: wnd.minimized || false,
 			dockState: wnd.dockState || null,
 			dockAnchorRight: wnd._dockAnchorRight || null,
 			dockAnchorBottom: wnd._dockAnchorBottom || null,
@@ -14609,6 +14859,13 @@
 		if (state.visible != null)
 		{
 			wnd.setVisible(state.visible);
+		}
+
+		// Restore minimized state after sizing so the saved full height
+		// is retained as the restore target on un-minimize.
+		if (state.minimized && !wnd.minimized)
+		{
+			wnd.toggleMinimized();
 		}
 
 		return state;

@@ -3955,13 +3955,24 @@ App.prototype.filterDrafts = function(filePath, guid, callback)
 					if (key != null && key.substring(0, 7) == '.draft_')
 					{
 						var obj = JSON.parse(items[i].data);
-						
-						if (obj != null && obj.type == 'draft' && obj.aliveCheck != guid && 
+
+						if (obj != null && obj.type == 'draft' && obj.aliveCheck != guid &&
 							((filePath == null && obj.fileObject == null) ||
-								(obj.fileObject != null && obj.fileObject.path == filePath)))	
+								(obj.fileObject != null && obj.fileObject.path == filePath)))
 						{
-							obj.key = key;
-							drafts.push(obj);
+							// Drop drafts whose payload has no user-added cells.
+							// These get created when a recovery draft is saved
+							// for a file the user then emptied; surfacing them
+							// in the draft picker only confuses the user.
+							if (this.isDiagramDataEmpty(obj.data))
+							{
+								this.removeDatabaseItem(key);
+							}
+							else
+							{
+								obj.key = key;
+								drafts.push(obj);
+							}
 						}
 					}
 				}

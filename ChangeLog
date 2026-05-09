@@ -1,3 +1,22 @@
+09-MAY-2026: 30.0.0
+
+- Uses cached sanitized label for SVG support detection
+- Updates DOMPurify from 3.4.0 to 3.4.2
+- Persists minimized state of floating windows
+- Moves adaptive colors to page setup, adds page setup in simple+min UI
+- Adds mermaid shapes from native-ports branch
+- Sizes math labels and view to rendered MathJax output [jgraph/drawio#3311]
+- Fixes math fit-to-window on page switch with sync MathJax typeset
+- Adds configurable tooltipFontSize and tooltipMaxWidth
+- Adds lockedGroup cell style for grouping cells as one image
+- Adds Mindmap Bang, Git Tag, and Smiley Faces in Basic sidebar
+- Fixes dropped initialText in cellEditor.startEditing override
+- Fixes tab scroller jumping left when switching from rightmost page
+- Keeps inline toolbar and popovers inside visible viewport
+- Fixed Lucid import chrome extension
+- Skips empty drafts on save and cleans up existing ones on startup
+- Default adaptive colours no longer simple in desktop
+
 05-MAY-2026: 29.7.12
 
 - Adds boundedLbl for manual input shape

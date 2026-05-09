@@ -3846,12 +3846,13 @@ TextFormatPanel.prototype.addFont = function(container)
 
 		for (var i = 0; i < cells.length && !hasUnsupported; i++)
 		{
-			var label = graph.getLabel(cells[i]);
-
+			var state = graph.view.getState(cells[i]);
+			var label = (state != null) ? graph.cellRenderer.getLabelValue(state) : null;
+			
 			if (label != null && label.length > 0)
 			{
 				var tmp = document.createElement('div');
-				tmp.innerHTML = Graph.sanitizeHtml(label);
+				tmp.innerHTML = label;
 				var elts = tmp.getElementsByTagName('*');
 
 				for (var j = 0; j < elts.length; j++)
@@ -6682,33 +6683,46 @@ DiagramStylePanel.prototype.addView = function(div)
 	
 	var opts = document.createElement('div');
 	opts.className = 'geFormatEntry';
-	
-	// Adaptive Colors
+
 	if (graph.isEnabled())
 	{
-		var table = document.createElement('table');
-		table.style.tableLayout = 'fixed';
-		table.style.width = '204px';
-		
-		var tbody = document.createElement('tbody');
-		var row = document.createElement('tr');
-		var left = document.createElement('td');
-		var right = left.cloneNode(true);
+		var row = document.createElement('div');
+		row.style.display = 'flex';
+		row.style.alignItems = 'center';
+		row.style.justifyContent = 'center';
+		row.style.gap = '8px';
+		row.style.width = '204px';
 
-		var label = document.createElement('div');
-		label.style.display = 'inline-block';
-		label.style.boxSizing = 'border-box';
-		label.style.overflow = 'hidden';
-		label.style.textOverflow = 'ellipsis';
+		var buttons = this.getGlobalStyleButtons();
 
-		var title = mxResources.get('adaptiveColors');
-		left.setAttribute('title', title);
-		mxUtils.write(label, title);
-		left.appendChild(label);
+		// Natural-width slots clustered in the center; shrink with ellipsis
+		// only when labels are too long to fit.
+		for (var i = 0; i < buttons.length; i++)
+		{
+			var btn = buttons[i];
+			btn.style.flex = '0 1 auto';
+			btn.style.minWidth = '0';
+
+			// geFormatEntry is display:flex, so wrap the trailing text node
+			// in a span so text-overflow ellipsis can apply to the label.
+			var textNode = btn.lastChild;
+
+			if (textNode != null && textNode.nodeType == 3)
+			{
+				var span = document.createElement('span');
+				span.style.overflow = 'hidden';
+				span.style.textOverflow = 'ellipsis';
+				span.style.whiteSpace = 'nowrap';
+				span.style.minWidth = '0';
+				span.appendChild(textNode);
+				btn.appendChild(span);
+			}
+
+			row.appendChild(btn);
+		}
 
 		if (mxUtils.lightDarkColorSupported)
 		{
-			label.style.width = '75%';
 			var img = document.createElement('img');
 			img.setAttribute('title', mxResources.get('light') +
 				'/' + mxResources.get('dark'));
@@ -6716,10 +6730,8 @@ DiagramStylePanel.prototype.addView = function(div)
 			img.className = 'geButton';
 			img.style.width = '18px';
 			img.style.height = '18px';
-			img.style.verticalAlign = 'bottom';
-			left.appendChild(img);
+			img.style.flex = '0 0 auto';
 
-			// Pressing label toggles dark/light mode
 			mxEvent.addListener(img, 'click', function()
 			{
 				if (graph.isEnabled())
@@ -6727,96 +6739,14 @@ DiagramStylePanel.prototype.addView = function(div)
 					ui.setDarkMode(!Editor.isDarkMode());
 				}
 			});
-		}
-		else
-		{
-			label.style.width = '100%';
+
+			row.appendChild(img);
 		}
 
-		var dropdown = document.createElement('select');
-		dropdown.style.width = '82px';
-
-		var opt = document.createElement('option');
-		opt.setAttribute('title', mxResources.get('default') + ' (' +
-			mxResources.get(Graph.getDefaultAdaptiveColorsKey()) + ')');
-		mxUtils.write(opt, mxUtils.htmlEntities(opt.getAttribute('title')));
-		opt.setAttribute('value', 'default');
-		dropdown.appendChild(opt);
-
-		var opt = document.createElement('option');
-		opt.setAttribute('title', mxResources.get('automatic'));
-		mxUtils.write(opt, mxUtils.htmlEntities(opt.getAttribute('title')));
-		opt.setAttribute('value', 'auto');
-		dropdown.appendChild(opt);
-
-		var opt = document.createElement('option');
-		opt.setAttribute('title', mxResources.get('simple'));
-		mxUtils.write(opt, mxUtils.htmlEntities(opt.getAttribute('title')));
-		opt.setAttribute('value', 'simple');
-		dropdown.appendChild(opt);
-
-		var opt = document.createElement('option');
-		opt.setAttribute('title', mxResources.get('none'));
-		mxUtils.write(opt, mxUtils.htmlEntities(opt.getAttribute('title')));
-		opt.setAttribute('value', 'none');
-		dropdown.appendChild(opt);
-
-		dropdown.value = (graph.adaptiveColors == null) ?
-			'default' : graph.adaptiveColors;
-
-		mxEvent.addListener(dropdown, 'change', function()
-		{
-			var change = new ChangePageSetup(ui);
-			change.ignoreColor = true;
-			change.ignoreImage = true;
-			change.adaptiveColors = dropdown.value;
-			
-			graph.model.execute(change);
-		});
-		
-		right.appendChild(dropdown);
-
-		if (!ui.isOffline() || mxClient.IS_CHROMEAPP || EditorUi.isElectronApp)
-		{
-			right.appendChild(ui.menus.createHelpLink(
-				'https://github.com/jgraph/drawio/discussions/4713'));
-		}
-
-		row.appendChild(left);
-		row.appendChild(right);
-		tbody.appendChild(row);
-
-		var buttons = this.getGlobalStyleButtons();
-	
-		for (var i = 0; i < buttons.length; i += 2)
-		{
-			left = left.cloneNode(false);
-			right = right.cloneNode(false);
-			row = row.cloneNode(false);
-	
-			var btn = buttons[i];
-			btn.style.width = '100%';
-	
-			left.appendChild(btn);
-			row.appendChild(left);
-	
-			btn = buttons[i + 1];
-	
-			if (btn != null)
-			{
-				btn.style.width = '100%';
-				right.appendChild(btn);
-			}
-	
-			row.appendChild(right);
-			tbody.appendChild(row);
-		}
-	
-		table.appendChild(tbody);
-		opts.appendChild(table);
+		opts.appendChild(row);
 		div.appendChild(opts);
-	
-		if (graph.isEnabled() && Editor.styles != null)
+
+		if (Editor.styles != null)
 		{
 			this.addGraphStyles(div);
 		}

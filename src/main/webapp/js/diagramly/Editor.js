@@ -287,6 +287,14 @@
 	Editor.addSvgMetadata = false;
 
 	/**
+	 * If true, label autosize, view bounds and the post-load fit-to-window use
+	 * the MathJax-rendered math size rather than the raw formula text size,
+	 * and the canvas is hidden during typesetting to avoid showing the source.
+	 * Default is true. See [jgraph/drawio#3311].
+	 */
+	Editor.mathOutputSize = true;
+
+	/**
 	 * Specifies animations should be enabled. Default is true.
 	 */
 	Editor.enableAnimations = true;
@@ -325,6 +333,16 @@
 	 * Specifies if tooltip icons should be shown on shapes. Default is false.
 	 */
 	Editor.showTooltipIcons = false;
+
+	/**
+	 * Specifies the tooltip font size in pixels. Default is null (uses CSS default of 11px).
+	 */
+	Editor.tooltipFontSize = null;
+
+	/**
+	 * Specifies the tooltip max-width in pixels. Default is 360. 0 means no limit.
+	 */
+	Editor.tooltipMaxWidth = 360;
 
 	/**
 	 * Specifies if fill patterns should be expanded to inline geometry for
@@ -2621,6 +2639,11 @@
 				Editor.optimizeHtmlLabels = config.optimizeHtmlLabels;
 			}
 
+			if (config.mathOutputSize != null)
+			{
+				Editor.mathOutputSize = config.mathOutputSize;
+			}
+
 			if (config.pasteAtMousePointer != null)
 			{
 				Editor.pasteAtMousePointer = config.pasteAtMousePointer;
@@ -2644,6 +2667,34 @@
 			if (config.showTooltipIcons != null)
 			{
 				Editor.showTooltipIcons = config.showTooltipIcons;
+			}
+
+			if (config.tooltipFontSize != null)
+			{
+				var val = parseInt(config.tooltipFontSize);
+
+				if (!isNaN(val) && val > 0)
+				{
+					Editor.tooltipFontSize = val;
+				}
+				else
+				{
+					EditorUi.debug('Configuration Error: Int > 0 expected for tooltipFontSize');
+				}
+			}
+
+			if (config.tooltipMaxWidth != null)
+			{
+				var val = parseInt(config.tooltipMaxWidth);
+
+				if (!isNaN(val) && val >= 0)
+				{
+					Editor.tooltipMaxWidth = val;
+				}
+				else
+				{
+					EditorUi.debug('Configuration Error: Int >= 0 expected for tooltipMaxWidth');
+				}
 			}
 
 			if (config.expandPatternsForPrint != null)
@@ -3881,10 +3932,12 @@
 			// Blocks concurrent rendering while
 			// async rendering is in progress
 			var rendering = null;
+			Editor.mathJaxRendering = false;
 
 			function mathJaxDone()
 			{
 				rendering = null;
+				Editor.mathJaxRendering = false;
 
 				if (Editor.mathJaxQueue.length > 0)
 				{
@@ -3927,6 +3980,7 @@
 					if (e.retry != null)
 					{
 						rendering = container;
+						Editor.mathJaxRendering = true;
 
 						e.retry.then(function()
 						{
@@ -4010,12 +4064,44 @@
 					if (this.graph.container != null &&
 						this.graph.mathEnabled)
 					{
+						// Hides container until typeset completes to avoid
+						// showing the raw formula source. For a synchronous
+						// typeset, hide and show happen in the same tick.
+						if (Editor.mathOutputSize)
+						{
+							this.graph.container.style.visibility = 'hidden';
+						}
+
 						Editor.MathJaxRender(this.graph.container);
 					}
 				});
-				
+
 				this.graph.model.addListener(mxEvent.CHANGE, renderMath);
 				this.graph.addListener(mxEvent.REFRESH, renderMath);
+
+				// Refreshes cached label bounds after MathJax has typeset, so
+				// view bounds (used for export/scrollbars) reflect the rendered
+				// math size rather than the raw formula text size.
+				var graph = this.graph;
+				var prevOnMathJaxDone = Editor.onMathJaxDone;
+
+				Editor.onMathJaxDone = function()
+				{
+					if (prevOnMathJaxDone != null)
+					{
+						prevOnMathJaxDone.apply(this, arguments);
+					}
+
+					if (Editor.mathOutputSize && graph != null && graph.mathEnabled)
+					{
+						graph.refreshMathBounds();
+
+						if (graph.container != null)
+						{
+							graph.container.style.visibility = '';
+						}
+					}
+				};
 			};
 			
 			var tags = document.getElementsByTagName('script');
@@ -4029,6 +4115,218 @@
 			}
 		}
 	};
+
+	/**
+	 * Returns true if the given label contains TeX or AsciiMath delimiters
+	 * that MathJax would typeset.
+	 */
+	Editor.containsMath = function(text)
+	{
+		return text != null && (text.indexOf('$') >= 0 ||
+			text.indexOf('\\(') >= 0 || text.indexOf('\\[') >= 0 ||
+			text.indexOf('\\begin{') >= 0);
+	};
+
+	// Overrides autosize so that labels with math are measured after MathJax
+	// has typeset them, rather than measuring the raw formula source.
+	(function()
+	{
+		var graphGetPreferredSizeForCell = Graph.prototype.getPreferredSizeForCell;
+		var measureDiv = null;
+
+		Graph.prototype.getPreferredSizeForCell = function(cell, w, gridEnabled)
+		{
+			if (!Editor.mathOutputSize || !this.mathEnabled ||
+				typeof MathJax === 'undefined' ||
+				typeof MathJax.typeset !== 'function' || this.model.isEdge(cell))
+			{
+				return graphGetPreferredSizeForCell.apply(this, arguments);
+			}
+
+			var state = this.view.createState(cell);
+			var label = (state != null) ? this.cellRenderer.getLabelValue(state) : null;
+
+			if (label == null || label.length === 0 || !Editor.containsMath(label))
+			{
+				return graphGetPreferredSizeForCell.apply(this, arguments);
+			}
+
+			var origGetSizeForString = mxUtils.getSizeForString;
+
+			mxUtils.getSizeForString = function(text, fontSize, fontFamily, textWidth)
+			{
+				if (measureDiv == null)
+				{
+					measureDiv = document.createElement('div');
+					measureDiv.style.cssText = 'position:absolute;visibility:hidden;' +
+						'left:-10000px;top:-10000px;display:inline-block;';
+					document.body.appendChild(measureDiv);
+				}
+
+				measureDiv.style.fontSize = fontSize + 'px';
+				measureDiv.style.fontFamily = fontFamily;
+
+				if (textWidth != null && textWidth > 0)
+				{
+					measureDiv.style.width = textWidth + 'px';
+					measureDiv.style.whiteSpace = 'normal';
+				}
+				else
+				{
+					measureDiv.style.width = '';
+					measureDiv.style.whiteSpace = 'nowrap';
+				}
+
+				// Clears MathJax state attached by previous typeset
+				MathJax.typesetClear([measureDiv]);
+				measureDiv.innerHTML = Graph.sanitizeHtml(text);
+
+				try
+				{
+					MathJax.typeset([measureDiv]);
+					var rect = measureDiv.getBoundingClientRect();
+					return new mxRectangle(0, 0, rect.width, rect.height);
+				}
+				catch (e)
+				{
+					// Fonts may not be loaded yet; fall back to text measurement
+					return origGetSizeForString.apply(this, arguments);
+				}
+			};
+
+			try
+			{
+				return graphGetPreferredSizeForCell.apply(this, arguments);
+			}
+			finally
+			{
+				mxUtils.getSizeForString = origGetSizeForString;
+			}
+		};
+	})();
+
+	/**
+	 * Re-reads the rendered DOM size of every label that contains math so the
+	 * view's bounding box reflects MathJax's rendered output instead of the raw
+	 * formula source. Cell geometry is not modified. No-op when nothing math-y
+	 * is in the diagram.
+	 */
+	Graph.prototype.refreshMathBounds = function()
+	{
+		if (!Editor.mathOutputSize || !this.mathEnabled)
+		{
+			return;
+		}
+
+		var view = this.view;
+		var hasMath = false;
+
+		view.states.visit(mxUtils.bind(this, function(key, state)
+		{
+			if (state == null || state.text == null)
+			{
+				return;
+			}
+
+			var label = this.cellRenderer.getLabelValue(state);
+
+			if (typeof label === 'string' && Editor.containsMath(label))
+			{
+				state.text.updateBoundingBox();
+				hasMath = true;
+			}
+		}));
+
+		if (!hasMath)
+		{
+			return;
+		}
+
+		var rootCell = (view.currentRoot != null) ? view.currentRoot : this.model.getRoot();
+		var rootState = view.getState(rootCell);
+
+		if (rootState != null)
+		{
+			var bounds = view.getBoundingBox(rootState, true, false);
+			view.setGraphBounds((bounds != null) ? bounds : view.getEmptyBounds());
+			this.sizeDidChange();
+		}
+
+		this.fireEvent(new mxEventObject('mathRefreshed'));
+	};
+
+	// Re-runs initial fit-to-window after MathJax has typeset, so the fit uses
+	// the rendered math bounds rather than the (still wrong) raw-text bounds
+	// that were available at file-load time.
+	(function()
+	{
+		var editorUiInitialFitDiagram = EditorUi.prototype.initialFitDiagram;
+
+		EditorUi.prototype.initialFitDiagram = function(maxScale)
+		{
+			editorUiInitialFitDiagram.apply(this, arguments);
+
+			var graph = this.editor.graph;
+
+			if (!Editor.mathOutputSize || graph == null || !graph.mathEnabled)
+			{
+				return;
+			}
+
+			var args = arguments;
+			var ui = this;
+			var fired = false;
+
+			// Registers the mathRefreshed listener synchronously so it captures
+			// the typeset that follows. On page switch with fonts already loaded
+			// MathJax typesets synchronously inside the same dispatch as
+			// initialFitDiagram (pageSelected fires from change.execute, then
+			// edit.notify fires CHANGE → renderMath → typeset → mathRefreshed),
+			// so a deferred registration would miss the event.
+			var listener = function()
+			{
+				if (fired)
+				{
+					return;
+				}
+
+				fired = true;
+				graph.removeListener(listener);
+
+				// Reset to "fresh-load" defaults (scale=1, default scroll)
+				// so that re-running initialFitDiagram with zoomOutOnly=true
+				// either no-ops cleanly (matching a no-math page's fresh
+				// state) or zooms out as needed for oversized content.
+				graph.zoomTo(1);
+				ui.resetScrollbars();
+
+				editorUiInitialFitDiagram.apply(ui, args);
+			};
+
+			graph.addListener('mathRefreshed', listener);
+
+			// Defers a cleanup check to a microtask so the listener doesn't
+			// leak when MathJax is unavailable or the diagram contains no math
+			// to typeset (mathRefreshed never fires in that case).
+			Promise.resolve().then(function()
+			{
+				if (fired)
+				{
+					return;
+				}
+
+				var pending = (typeof MathJax === 'undefined') ||
+					(typeof MathJax.typeset !== 'function') ||
+					(Editor.mathJaxQueue != null && Editor.mathJaxQueue.length > 0) ||
+					Editor.mathJaxRendering;
+
+				if (!pending)
+				{
+					graph.removeListener(listener);
+				}
+			});
+		};
+	})();
 
 	/**
 	 * Parses line of CSV values according to RFC 4180.

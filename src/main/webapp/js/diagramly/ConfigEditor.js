@@ -84,6 +84,7 @@ DrawioConfigEditor.install = function(container, options)
 			{ key: 'noAutoFocus', name: 'No Auto Focus', help: 'Disable auto-focus on startup' },
 			{ key: 'updateDefaultStyle', name: 'Update Default Style', help: 'Update defaults when styles change' },
 			{ key: 'mathematicalTypesetting', name: 'Math Typesetting', help: 'Enable MathJax for mathematical typesetting' },
+			{ key: 'mathOutputSize', name: 'Math Output Size', help: 'Size labels, view bounds and initial fit to the rendered math output instead of the formula source' },
 			{ key: 'internationalization', name: 'Internationalization', help: 'Enable UI language translation' },
 			{ key: 'browserTranslate', name: 'Browser Translate', help: 'Mirror diagram text for browser translation engines (e.g. Chrome Translate)' }
 		],
@@ -320,6 +321,43 @@ DrawioConfigEditor.install = function(container, options)
 
 		widthEl.addEventListener('input', updatePageFormat);
 		heightEl.addEventListener('input', updatePageFormat);
+	}
+
+	// ============================================
+	// TOOLTIP MAX WIDTH
+	// ============================================
+	function setupTooltipMaxWidth()
+	{
+		var widthEl = q('#cfg-tooltipMaxWidth');
+		var checkEl = q('#cfg-tooltipMaxWidthEnabled');
+
+		function update()
+		{
+			widthEl.disabled = !checkEl.checked;
+
+			if (!checkEl.checked)
+			{
+				config.tooltipMaxWidth = 0;
+			}
+			else
+			{
+				var val = parseInt(widthEl.value);
+
+				if (!isNaN(val) && val > 0)
+				{
+					config.tooltipMaxWidth = val;
+				}
+				else
+				{
+					delete config.tooltipMaxWidth;
+				}
+			}
+
+			notifyChange();
+		}
+
+		checkEl.addEventListener('change', update);
+		widthEl.addEventListener('input', update);
 	}
 
 	// ============================================
@@ -812,6 +850,23 @@ DrawioConfigEditor.install = function(container, options)
 			}
 		});
 
+		var tooltipWidthEl = q('#cfg-tooltipMaxWidth');
+		var tooltipCheckEl = q('#cfg-tooltipMaxWidthEnabled');
+
+		if (config.tooltipMaxWidth !== undefined)
+		{
+			var enabled = config.tooltipMaxWidth > 0;
+			tooltipCheckEl.checked = enabled;
+			tooltipWidthEl.disabled = !enabled;
+			tooltipWidthEl.value = enabled ? config.tooltipMaxWidth : '';
+		}
+		else
+		{
+			tooltipCheckEl.checked = true;
+			tooltipWidthEl.disabled = false;
+			tooltipWidthEl.value = '';
+		}
+
 		if (config.pageFormat)
 		{
 			q('#cfg-pageFormatWidth').value = config.pageFormat.width || '';
@@ -1023,6 +1078,7 @@ DrawioConfigEditor.install = function(container, options)
 	setupFieldHandlers();
 	setupColorSync();
 	setupPageFormat();
+	setupTooltipMaxWidth();
 	setupFontList('defaultFonts');
 	setupFontList('customFonts');
 	setupColorList('presetColors');
@@ -1396,6 +1452,19 @@ DrawioConfigEditor.html = [
 	'          <input type="number" id="cfg-foldingIconSize" data-key="foldingIconSize" placeholder="9" min="1">',
 	'        </div>',
 	'        <div class="field"></div>',
+	'      </div>',
+	'      <div class="field-row">',
+	'        <div class="field">',
+	'          <label for="cfg-tooltipFontSize">Tooltip Font Size (px)</label>',
+	'          <input type="number" id="cfg-tooltipFontSize" data-key="tooltipFontSize" placeholder="11" min="1">',
+	'        </div>',
+	'        <div class="field">',
+	'          <label for="cfg-tooltipMaxWidth">Tooltip Max Width (px)</label>',
+	'          <div style="display: flex; gap: 6px; align-items: center;">',
+	'            <input type="number" id="cfg-tooltipMaxWidth" placeholder="360" min="1" style="flex: 1;">',
+	'            <label class="checkbox" style="white-space: nowrap;"><input type="checkbox" id="cfg-tooltipMaxWidthEnabled"> <span>Limit</span></label>',
+	'          </div>',
+	'        </div>',
 	'      </div>',
 	'      <div class="field-row">',
 	'        <div class="field">',
