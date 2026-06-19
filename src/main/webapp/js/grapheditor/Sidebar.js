@@ -4933,7 +4933,7 @@ Sidebar.prototype.addPalette = function(id, title, expanded, onInit)
 
 	if (expanded && this.expandLibraries)
 	{
-		onInit(div);
+		onInit(div, elt);
 		onInit = null;
 	}
 	else

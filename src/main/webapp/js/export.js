@@ -113,8 +113,75 @@ Editor.initMath((remoteMath? 'https://app.diagrams.net/' : '') + 'math4/es5/star
 var fontPreload = {};
 var cssPreload = {};
 
+// Returns true if any page in the given diagram XML enables MathJax
+// typesetting (math="1"), decompressing diagram nodes as needed. Used to
+// decide whether the export must wait for MathJax to load. [jgraph/drawio#5564]
+function exportUsesMath(xml)
+{
+	try
+	{
+		var node = mxUtils.parseXml(xml).documentElement;
+
+		if (node.nodeName == 'mxfile')
+		{
+			var diagrams = node.getElementsByTagName('diagram');
+
+			for (var i = 0; i < diagrams.length; i++)
+			{
+				var model = Editor.parseDiagramNode(diagrams[i]);
+
+				if (model != null && model.getAttribute('math') == '1')
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		return node.getAttribute('math') == '1';
+	}
+	catch (e)
+	{
+		return false;
+	}
+};
+
 function render(data)
 {
+	// Math typesetting must be available before the diagram is measured below,
+	// so the export crop follows the rendered math size rather than the raw
+	// formula source. MathJax loads asynchronously (see Editor.initMath) and the
+	// export is typically triggered before it is ready, so when the diagram uses
+	// math, wait for MathJax to load and then render. [jgraph/drawio#5564]
+	if (Editor.mathOutputSize && data.xml != null && !data.mathChecked &&
+		(typeof MathJax === 'undefined' || typeof MathJax.typeset !== 'function') &&
+		exportUsesMath(data.xml))
+	{
+		// Computes exportUsesMath only once, then polls for MathJax readiness.
+		data.mathChecked = true;
+		var mathWaitStart = Date.now();
+
+		var waitForMath = function()
+		{
+			// Falls back to rendering without waiting after a timeout so a
+			// missing or broken MathJax never blocks the export indefinitely.
+			if ((typeof MathJax !== 'undefined' && typeof MathJax.typeset === 'function') ||
+				Date.now() - mathWaitStart > 10000)
+			{
+				render(data);
+			}
+			else
+			{
+				window.setTimeout(waitForMath, 50);
+			}
+		};
+
+		waitForMath();
+
+		return;
+	}
+
 	if (data.shadows == '0')
 	{
 		addShadowBlocker();
@@ -412,7 +479,11 @@ function render(data)
 
 		var srcDoc = mxUtils.parseXml(data.xml);
 		var isMxfile = srcDoc.documentElement.nodeName == 'mxfile';
-		var modelNode = Editor.extractGraphModel(srcDoc.documentElement, true);
+		// allowMxFile must be false here: the layout path decodes modelNode
+		// directly via mxCodec, which requires the inner mxGraphModel. Passing
+		// true returns the mxfile wrapper, which decodes to an empty model and
+		// drops every cell from the laid-out output.
+		var modelNode = Editor.extractGraphModel(srcDoc.documentElement, false);
 
 		if (modelNode == null)
 		{
@@ -1080,6 +1151,29 @@ function render(data)
 		var codec = new mxCodec(xmlDoc);
 		var model = graph.getModel();
 		codec.decode(xmlDoc.documentElement, model);
+
+		// Sizes the export crop to the rendered MathJax output rather than the
+		// raw formula source. The diagram is decoded synchronously here, but the
+		// labels are only typeset later (see renderMath below), so the bounds
+		// computed in this function would otherwise reflect the much wider source
+		// text and crop the export with excessive margins. render() waits for
+		// MathJax to load before reaching this point (see the math gate at the
+		// top of render), so typeset synchronously now and refresh the bounds.
+		// [jgraph/drawio#5564]
+		if (Editor.mathOutputSize && graph.mathEnabled &&
+			typeof MathJax !== 'undefined' && typeof MathJax.typeset === 'function')
+		{
+			try
+			{
+				MathJax.typeset([graph.container]);
+			}
+			catch (e)
+			{
+				// Fonts may not be loaded yet; bounds fall back to source size
+			}
+
+			graph.refreshMathBounds();
+		}
 
 		var bg;
 		

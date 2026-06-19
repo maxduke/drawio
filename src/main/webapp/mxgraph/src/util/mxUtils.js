@@ -5298,7 +5298,7 @@ var mxUtils =
 	 */
 	isVerticalTextDirection: function(dir)
 	{
-		return dir != null && dir.substring(0, 9) == 'vertical-';
+		return dir != null && typeof dir === 'string' && dir.substring(0, 9) == 'vertical-';
 	},
 
 	/**

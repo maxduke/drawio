@@ -48,7 +48,7 @@
 	<shape aspect="variable" h="110" name="Dual Gate MOSFET N" strokewidth="inherit" w="100">
 		<connections>
 			<constraint name="G1" perimeter="0" x="0" y="0.4"/>
-			<constraint name="G2" perimeter="0" x="0" y="0.72"/>
+			<constraint name="G2" perimeter="0" x="0" y="0.7182"/>
 			<constraint name="D" perimeter="0" x="0.7" y="0"/>
 			<constraint name="S" perimeter="0" x="0.7" y="1"/>
 		</connections>
@@ -92,7 +92,7 @@
 	<shape aspect="variable" h="110" name="Dual Gate MOSFET P" strokewidth="inherit" w="100">
 		<connections>
 			<constraint name="G1" perimeter="0" x="0" y="0.4"/>
-			<constraint name="G2" perimeter="0" x="0" y="0.72"/>
+			<constraint name="G2" perimeter="0" x="0" y="0.7182"/>
 			<constraint name="D" perimeter="0" x="0.7" y="0"/>
 			<constraint name="S" perimeter="0" x="0.7" y="1"/>
 		</connections>
@@ -135,7 +135,7 @@
 	</shape>
 	<shape aspect="variable" h="110" name="MOSFET IC N" strokewidth="inherit" w="100">
 		<connections>
-			<constraint name="G" perimeter="0" x="0" y="0.72"/>
+			<constraint name="G" perimeter="0" x="0" y="0.7182"/>
 			<constraint name="D" perimeter="0" x="0.7" y="0"/>
 			<constraint name="S" perimeter="0" x="0.7" y="1"/>
 		</connections>
@@ -179,7 +179,7 @@
 	</shape>
 	<shape aspect="variable" h="110" name="MOSFET IC P" strokewidth="inherit" w="100">
 		<connections>
-			<constraint name="G" perimeter="0" x="0" y="0.72"/>
+			<constraint name="G" perimeter="0" x="0" y="0.7182"/>
 			<constraint name="D" perimeter="0" x="0.7" y="0"/>
 			<constraint name="S" perimeter="0" x="0.7" y="1"/>
 		</connections>
@@ -289,7 +289,7 @@
 	</shape>
 	<shape aspect="variable" h="110" name="N-channel MOSFET 1" strokewidth="inherit" w="100">
 		<connections>
-			<constraint name="G" perimeter="0" x="0" y="0.72"/>
+			<constraint name="G" perimeter="0" x="0" y="0.7182"/>
 			<constraint name="D" perimeter="0" x="0.7" y="0"/>
 			<constraint name="S" perimeter="0" x="0.7" y="1"/>
 		</connections>
@@ -556,7 +556,7 @@
 	</shape>
 	<shape aspect="variable" h="110" name="P-channel MOSFET 1" strokewidth="inherit" w="100">
 		<connections>
-			<constraint name="G" perimeter="0" x="0" y="0.72"/>
+			<constraint name="G" perimeter="0" x="0" y="0.7182"/>
 			<constraint name="D" perimeter="0" x="0.7" y="0"/>
 			<constraint name="S" perimeter="0" x="0.7" y="1"/>
 		</connections>

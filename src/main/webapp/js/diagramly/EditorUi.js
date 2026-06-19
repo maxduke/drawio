@@ -21781,6 +21781,23 @@
 								{
 									this.parseMermaidDiagram(data.data, null, mxUtils.bind(this, function(xml)
 									{
+										// Opt in per descriptor with wrap:true to wrap the
+										// result in the editable mermaid group (a re-openable
+										// group carrying the source), matching Insert >
+										// Mermaid. Default off for backwards compatibility:
+										// existing integrators load the raw parsed cells.
+										//
+										// normalize:true shifts the wrapped content so the
+										// group's padded bounds start at (0,0) — the diagram
+										// is loaded as a full file here (not imported at an
+										// insert point), so without this the groupPadding
+										// spills into negative space off the page origin.
+										if (data.wrap)
+										{
+											xml = mxMermaidToDrawio.wrapGroup(xml, data.data,
+												null, {normalize: true});
+										}
+
 										fn(xml, evt, null, convertToSketch);
 
 										// Post load event back to parent (doLoad is out of scope here)

@@ -4282,6 +4282,8 @@ EditorUi.prototype.initCanvas = function()
 						var sp = new mxPoint(graph.container.scrollLeft, graph.container.scrollTop);
 						var offset = mxUtils.getOffset(graph.container);
 						var prev = graph.view.scale;
+						var tx0 = graph.view.translate.x;
+						var ty0 = graph.view.translate.y;
 						var dx = 0;
 						var dy = 0;
 						
@@ -4291,28 +4293,66 @@ EditorUi.prototype.initCanvas = function()
 							dy = graph.container.offsetHeight / 2 - cursorPosition.y + offset.y;
 						}
 
-						graph.zoom(graph.cumulativeZoomFactor, null,
-							graph.isFastZoomEnabled() ? mult : null);
+						// Skips the built-in scroll reconciliation for editor (scrollbar)
+						// mode so the exact zoom-to-cursor anchor can be applied below.
+						// The chromeless/no-scrollbar path keeps the legacy behaviour.
+						var exact = resize == null && mxUtils.hasScrollbars(graph.container);
+						graph.zoom(graph.cumulativeZoomFactor, exact ? false : null,
+							graph.isFastZoomEnabled() ? mult : null, exact);
 						var s = graph.view.scale;
-						
+
 						if (s != prev)
 						{
-							if (scrollPosition != null)
+							if (exact)
 							{
-								dx += sp.x - scrollPosition.x;
-								dy += sp.y - scrollPosition.y;
+								// Exact zoom-to-cursor: keeps the world point under the
+								// anchor pixel (cursor, else viewport centre) fixed as the
+								// scale changes. Derived from holding the on-screen position
+								// p = (w + translate) * scale - scroll constant, which gives
+								// scroll' = scroll * f + p * (f - 1) + (translate' - translate) * s.
+								// Uses the rounded scale s so the repaint lands on exactly the
+								// previewed scale, and folds in any translate shift caused by
+								// the canvas resize during the zoom.
+								var f = s / prev;
+								var px = (cursorPosition != null) ?
+									cursorPosition.x - offset.x : graph.container.clientWidth / 2;
+								var py = (cursorPosition != null) ?
+									cursorPosition.y - offset.y : graph.container.clientHeight / 2;
+
+								// Accounts for any pan/scroll that happened while the repaint
+								// was pending (e.g. right-button pan): the CSS preview pivots
+								// about a content point that moves with the scroll, so the
+								// anchor pixel must follow it to match the preview at handoff.
+								if (scrollPosition != null)
+								{
+									px -= sp.x - scrollPosition.x;
+									py -= sp.y - scrollPosition.y;
+								}
+
+								graph.container.scrollLeft = Math.round(sp.x * f + px * (f - 1) +
+									(graph.view.translate.x - tx0) * s);
+								graph.container.scrollTop = Math.round(sp.y * f + py * (f - 1) +
+									(graph.view.translate.y - ty0) * s);
 							}
-							
-							if (resize != null)
+							else
 							{
-								ui.chromelessResize(false, null, dx * (graph.cumulativeZoomFactor - 1),
-									dy * (graph.cumulativeZoomFactor - 1));
-							}
-							
-							if (mxUtils.hasScrollbars(graph.container) && (dx != 0 || dy != 0))
-							{
-								graph.container.scrollLeft -= dx * (graph.cumulativeZoomFactor - 1);
-								graph.container.scrollTop -= dy * (graph.cumulativeZoomFactor - 1);
+								if (scrollPosition != null)
+								{
+									dx += sp.x - scrollPosition.x;
+									dy += sp.y - scrollPosition.y;
+								}
+
+								if (resize != null)
+								{
+									ui.chromelessResize(false, null, dx * (graph.cumulativeZoomFactor - 1),
+										dy * (graph.cumulativeZoomFactor - 1));
+								}
+
+								if (mxUtils.hasScrollbars(graph.container) && (dx != 0 || dy != 0))
+								{
+									graph.container.scrollLeft -= dx * (graph.cumulativeZoomFactor - 1);
+									graph.container.scrollTop -= dy * (graph.cumulativeZoomFactor - 1);
+								}
 							}
 						}
 						

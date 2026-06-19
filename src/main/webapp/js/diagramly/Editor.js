@@ -8574,6 +8574,33 @@
 		ignoreSelection, showText, imgExport, linkTarget, hasShadow,
 		incExtFonts, theme, exportType, cells, noCssClass, disableLinks)
 	{
+		// Sizes the export crop to the rendered MathJax output rather than the
+		// raw formula source. Export paths that build a temporary graph (and the
+		// headless export backend) compute the crop before the labels have been
+		// typeset, so the cached view bounds reflect the much wider source text
+		// and the export gets excessive margins. Typesets synchronously (only if
+		// the labels are not already typeset, to leave the live editor untouched)
+		// and refreshes the math bounds so the base getSvg crops correctly.
+		// [jgraph/drawio#5564]
+		if (Editor.mathOutputSize && this.mathEnabled &&
+			this.container != null && document.body.contains(this.container) &&
+			typeof MathJax !== 'undefined' && typeof MathJax.typeset === 'function')
+		{
+			if (this.container.getElementsByTagName('mjx-container').length == 0)
+			{
+				try
+				{
+					MathJax.typeset([this.container]);
+				}
+				catch (e)
+				{
+					// Fonts may not be loaded yet; bounds fall back to source size
+				}
+			}
+
+			this.refreshMathBounds();
+		}
+
 		var result = graphGetSvg.apply(this, arguments);
 
 		if (theme != null)

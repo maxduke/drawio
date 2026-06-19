@@ -1,3 +1,17 @@
+19-JUN-2026: 30.2.5
+
+- fix(sidebar): pass title element to onInit in expanded addPalette path
+- feat(embed): optional mermaid group wrap on descriptor load
+- Fixes view jump on mouse wheel zoom [jgraph/drawio#5639]
+- Fixes off-center connection points on electrical stencils [jgraph/drawio#5627]
+- Fixes zoom-to-cursor jump when panning during a pending repaint [jgraph/drawio#5639]
+- Adds temporary flag-gated zoom debug logging [jgraph/drawio#5639]
+- Revert "Adds temporary flag-gated zoom debug logging [jgraph/drawio#5639]"
+- Sizes math export crop to rendered MathJax output [jgraph/drawio#5564]
+- Guard mxUtils.isVerticalTextDirection against non-string values
+- Fix desktop CLI Mermaid + ELK layout export
+- Fixes stored XSS on file open via editable=0
+
 18-JUN-2026: 30.2.4
 
 - Replaces mermaid in deployed version

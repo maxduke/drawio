@@ -4113,6 +4113,17 @@ TextFormatPanel.prototype.addFont = function(container)
 			var cellState = graph.view.getState(cells[i]);
 			var label = (cellState != null) ? graph.cellRenderer.getLabelValue(cellState) : null;
 
+			// Escapes plain-text labels before they are parsed as HTML below.
+			// getLabelValue only sanitizes HTML labels (html=1 or whiteSpace=wrap)
+			// and returns the raw value for plain-text cells, so an editable=0
+			// plain-text sibling can smuggle a raw label into canConvertHtmlToSvg
+			// (which assigns it to innerHTML). See the same guard used for label
+			// measurement in Graph.updateCellSize and mxText.updateValue.
+			if (label != null && label.length > 0 && !graph.isHtmlLabel(cells[i]))
+			{
+				label = mxUtils.htmlEntities(label, false);
+			}
+
 			if (label != null && label.length > 0 && !mxUtils.canConvertHtmlToSvg(label, {
 				dir: cellState.style[mxConstants.STYLE_TEXT_DIRECTION],
 				fontSize: mxUtils.getValue(cellState.style, mxConstants.STYLE_FONTSIZE,

@@ -2656,10 +2656,12 @@ App.prototype.getThumbnail = function(width, fn, border)
 
 			if (this.currentPage == page)
 			{
+				graph.mathEnabled = this.editor.graph.mathEnabled;
 				graph.setBackgroundImage(bgImg);
 			}
 			else if (page.viewState != null && page.viewState != null)
 			{
+				graph.mathEnabled = page.viewState.mathEnabled;
 				bgImg = page.viewState.backgroundImage;
 				graph.setBackgroundImage(bgImg);
 			}
