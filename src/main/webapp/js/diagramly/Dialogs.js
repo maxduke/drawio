@@ -1857,19 +1857,22 @@ var ParseDialog = function(editorUi, title, defaultType)
 				}
 			}
 		}
-		else if (type == 'mermaid')
+		else if (type == 'mermaid' || type == 'mermaidImage')
 		{
 			if (editorUi.spinner.spin(document.body, mxResources.get('inserting')))
 			{
-				editorUi.parseMermaidDiagram(text, null, mxUtils.bind(this, function(xml)
+				var insertMermaid = mxUtils.bind(this, function(insertXml)
 				{
 					editorUi.spinner.stop();
+
+					// Parsing is async so the dialog is kept open until it
+					// succeeds (see okBtn); hide it now that insert is happening
+					editorUi.hideDialog();
 					var graph = editorUi.editor.graph;
 					graph.getModel().beginUpdate();
 					try
 					{
-						var inserted = editorUi.importXml(
-							mxMermaidToDrawio.wrapGroup(xml, text, null),
+						var inserted = editorUi.importXml(insertXml,
 							Math.max(insertPoint.x, 20),
 							Math.max(insertPoint.y, 20),
 							true, null, null, true);
@@ -1881,10 +1884,29 @@ var ParseDialog = function(editorUi, title, defaultType)
 					}
 
 					graph.scrollCellToVisible(graph.getSelectionCell());
-				}), mxUtils.bind(this, function(e)
+				});
+
+				var onMermaidError = mxUtils.bind(this, function(e)
 				{
+					// Keeps the dialog open on parse failure (e.g. unsupported
+					// diagram type) so the input isn't lost
+					editorUi.spinner.stop();
 					editorUi.handleError(e);
-				}));
+				});
+
+				if (type == 'mermaidImage')
+				{
+					// Inserts the parsed diagram as a static SVG image cell
+					// (carrying the mermaid source for re-editing).
+					editorUi.parseMermaidImage(text, insertMermaid, onMermaidError);
+				}
+				else
+				{
+					editorUi.parseMermaidDiagram(text, null, mxUtils.bind(this, function(xml)
+					{
+						insertMermaid(mxMermaidToDrawio.wrapGroup(xml, text, null));
+					}), onMermaidError);
+				}
 			}
 		}
 		else if (type == 'table')
@@ -2270,11 +2292,19 @@ var ParseDialog = function(editorUi, title, defaultType)
 
 	if (defaultType == 'mermaid')
 	{
-		var mermaidOption = document.createElement('option');
-		mermaidOption.setAttribute('value', 'mermaid');
-		mermaidOption.setAttribute('selected', 'selected');
-		typeSelect.appendChild(mermaidOption);
-		typeSelect.style.display = 'none';
+		// Diagram (default, editable group) vs Image (static SVG) — restores the
+		// legacy Mermaid output dropdown. Hidden for embedded services by the
+		// service check above, where only the default (diagram) output is used.
+		var mermaidDiagramOption = document.createElement('option');
+		mermaidDiagramOption.setAttribute('value', 'mermaid');
+		mermaidDiagramOption.setAttribute('selected', 'selected');
+		mxUtils.write(mermaidDiagramOption, mxResources.get('diagram'));
+		typeSelect.appendChild(mermaidDiagramOption);
+
+		var mermaidImageOption = document.createElement('option');
+		mermaidImageOption.setAttribute('value', 'mermaidImage');
+		mxUtils.write(mermaidImageOption, mxResources.get('image'));
+		typeSelect.appendChild(mermaidImageOption);
 	}
 
 	var diagramOption = document.createElement('option');
@@ -2337,7 +2367,7 @@ var ParseDialog = function(editorUi, title, defaultType)
 			return 'Person\n-name: String\n-birthDate: Date\n--\n+getName(): String\n+setName(String): void\n+isBirthday(): boolean\n\n' +
 				'Address\n-street: String\n-city: String\n-state: String';
 		}
-		else if (typeSelect.value == 'mermaid')
+		else if (typeSelect.value == 'mermaid' || typeSelect.value == 'mermaidImage')
 		{
 			return 'graph TD;\n  A-->B;\n  A-->C;\n  B-->D;\n  C-->D;';
 		}
@@ -2470,7 +2500,14 @@ var ParseDialog = function(editorUi, title, defaultType)
 	{
 		try
 		{
-			editorUi.hideDialog();
+			// Mermaid parsing is async and may fail (e.g. unsupported diagram
+			// type); keep the dialog open so the input isn't lost. The mermaid
+			// branch in parse hides the dialog itself once parsing succeeds.
+			if (typeSelect.value != 'mermaid' && typeSelect.value != 'mermaidImage')
+			{
+				editorUi.hideDialog();
+			}
+
 			parse(textarea.value, typeSelect.value, evt);
 		}
 		catch (e)
@@ -11201,11 +11238,24 @@ var ChatWindow = function(editorUi, x, y, w, h)
 			return wrapper;
 		};
 		
-		function createError(message)
+		function createError(err)
 		{
 			var title = mxResources.get('error') + ': ';
 			var wrapper = document.createElement('div');
 			wrapper.style.whiteSpace = 'pre-wrap';
+
+			// Error can be an Error/object with a message, a plain string
+			// (e.g. mxscript's "Failed to load ..." on script load failure)
+			// or null, so the message is derived defensively here
+			var message = (err != null && err.message != null) ? err.message :
+				((typeof err === 'string') ? err : mxResources.get('unknownError'));
+
+			// Coerces to string in case message is a non-string (e.g. a
+			// parsed JSON error object assigned to e.message)
+			if (typeof message !== 'string')
+			{
+				message = String(message);
+			}
 
 			if (message.substring(0, title.length) != title)
 			{
@@ -11221,7 +11271,7 @@ var ChatWindow = function(editorUi, x, y, w, h)
 		var handleError = mxUtils.bind(this, function(e)
 		{
 			waiting.innerHTML = '';
-			waiting.appendChild(createError(e.message));
+			waiting.appendChild(createError(e));
 			waiting.scrollIntoView({behavior: 'smooth',
 				block: 'end', inline: 'nearest'});
 			EditorUi.debug('EditorUi.ChatWindow.handleError',
@@ -11527,7 +11577,11 @@ var ChatWindow = function(editorUi, x, y, w, h)
 							{
 								if (!editorUi.isStandaloneApp())
 								{
-									editorUi.editor.editAsNew(data[1]);
+									// Serializes the normalized cells (moved to start at
+									// (0,0) above) so the wrapper group opens at the origin
+									// instead of carrying the response's original offset
+									editorUi.editor.editAsNew(mxUtils.getXml(
+										graph.encodeCells(cells)));
 								}
 								else
 								{
@@ -11715,7 +11769,7 @@ var ChatWindow = function(editorUi, x, y, w, h)
 				}), function(e)
 				{
 					waiting.innerHTML = '';
-					waiting.appendChild(createError(e.message));
+					waiting.appendChild(createError(e));
 					waiting.scrollIntoView({behavior: 'smooth',
 						block: 'end', inline: 'nearest'});
 					EditorUi.debug('EditorUi.ChatWindow.addMessage',

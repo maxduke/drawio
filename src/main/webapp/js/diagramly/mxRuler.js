@@ -54,7 +54,7 @@ function mxRuler(editorUi, unit, isVertical, isSecondery)
 
 	    container.style.top = (dg.offsetTop - offset.y) + 'px';
 	    container.style.left = (dg.offsetLeft - offset.x) + 'px';
-	    container.style.width = ((isVertical? 0 : dg.offsetWidth) + RULER_THICKNESS) + 'px';
+	    container.style.width = ((isVertical? 0 : dg.offsetWidth - 1) + RULER_THICKNESS) + 'px';
 	    container.style.height = ((isVertical? dg.offsetHeight : 0) + RULER_THICKNESS) + 'px';
 	};
     

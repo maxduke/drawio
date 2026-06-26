@@ -104,10 +104,21 @@ EditorUi = function(editor, container, lightbox)
 		{
 			try
 			{
-				if (graph.getModel().isEdge(cell))
+				var model = graph.getModel();
+
+				// Edge labels (vertex children of edges) only update the text styles
+				// of the edge default so they stay consistent with the edge's own
+				// label and never touch the vertex default (see pasteCellStyles)
+				var isEdgeLabel = model.isVertex(cell) && model.isEdge(model.getParent(cell));
+
+				if (model.isEdge(cell) || isEdgeLabel)
 				{
-					graph.pasteEdgeStyle = false;
 					edgeStyleIgnored = false;
+
+					if (model.isEdge(cell))
+					{
+						graph.pasteEdgeStyle = false;
+					}
 				}
 				else
 				{
@@ -125,26 +136,30 @@ EditorUi = function(editor, container, lightbox)
 				}
 
 				// Resets current style
-				if (graph.getModel().isEdge(cell))
+				if (model.isEdge(cell))
 				{
 					graph.currentEdgeStyle = {};
 				}
-				else
+				else if (!isEdgeLabel)
 				{
 					graph.currentVertexStyle = {}
 				}
-	
+
 				this.fireEvent(new mxEventObject('styleChanged',
-					'keys', keys, 'values', values,
-					'cells', [cell], 'force', true));
-				
+					'keys', keys, 'values', values, 'cells', [cell],
+					'force', true, 'edgeLabel', isEdgeLabel));
+
 				// Blocks update of default style with style changes
 				// and allows change of edge style if default style
 				// was changed using this function via app UI
-				if (graph.getModel().isEdge(cell))
+				if (model.isEdge(cell) || isEdgeLabel)
 				{
-					graph.pasteEdgeStyle = true;
 					edgeStyleIgnored = true;
+
+					if (model.isEdge(cell))
+					{
+						graph.pasteEdgeStyle = true;
+					}
 				}
 				else
 				{
@@ -866,7 +881,7 @@ EditorUi = function(editor, container, lightbox)
 				graph.copyCellStyles(evt.getProperty('cells'),
 					evt.getProperty('keys'), evt.getProperty('values'),
 					graph.currentVertexStyle, graph.currentEdgeStyle,
-					vertexStyleIgnored, edgeStyleIgnored);
+					vertexStyleIgnored, edgeStyleIgnored, evt.getProperty('edgeLabel'));
 			}
 
 			if (this.toolbar != null)
@@ -1939,6 +1954,14 @@ EditorUi.prototype.installShapePicker = function()
 	{
 		if (this.isEnabled())
 		{
+			// Offers a shape to connect when double clicking an unconnected edge
+			// terminal (edge line or an orthogonal/elbow terminal handle, which
+			// routes here; straight-edge handles are handled via the edge handler)
+			var terminal = (cell != null && ui.sidebar != null && !mxEvent.isShiftDown(evt) &&
+				!graph.isCellLocked(cell) && graph.getLockedGroupAncestor(
+				graph.model.getParent(cell)) == null) ?
+				ui.getDoubleClickTerminalForEvent(evt, cell) : null;
+
 			if (cell == null && ui.sidebar != null && !mxEvent.isShiftDown(evt) &&
 				!graph.isCellLocked(graph.getDefaultParent()))
 			{
@@ -1951,12 +1974,42 @@ EditorUi.prototype.installShapePicker = function()
 					ui.showShapePicker(pt.x, pt.y);
 				}), 30);
 			}
+			else if (terminal != null)
+			{
+				mxEvent.consume(evt);
+
+				// Asynchronous to avoid direct insert after double tap
+				window.setTimeout(mxUtils.bind(this, function()
+				{
+					ui.showShapePickerForEdgeTerminal(cell, terminal.source, terminal.point);
+				}), 30);
+			}
 			else
 			{
 				graphDblClick.apply(this, arguments);
 			}
 		}
 	};
+
+	// Shows the shape picker for double click on a straight-edge terminal handle
+	// (fired by mxEdgeHandler.removePoint for unconnected terminals)
+	graph.addListener('doubleClickEdgeTerminal', mxUtils.bind(this, function(sender, evt)
+	{
+		var cell = evt.getProperty('cell');
+		var point = evt.getProperty('point');
+
+		if (cell != null && point != null && !graph.isCellLocked(cell) &&
+			graph.getLockedGroupAncestor(graph.model.getParent(cell)) == null)
+		{
+			var source = evt.getProperty('source');
+
+			// Asynchronous to avoid direct insert after double tap
+			window.setTimeout(mxUtils.bind(this, function()
+			{
+				ui.showShapePickerForEdgeTerminal(cell, source, point);
+			}), 30);
+		}
+	}));
 
 	if (this.hoverIcons != null)
 	{
@@ -2162,6 +2215,115 @@ EditorUi.prototype.installShapePicker = function()
 };
 
 /**
+ * Returns {point, source} for an unconnected terminal of the given edge cell
+ * that is within tolerance of the given double click event, otherwise null.
+ * The point is in absolute (scaled) coordinates as used by the shape picker.
+ */
+EditorUi.prototype.getDoubleClickTerminalForEvent = function(evt, cell)
+{
+	var graph = this.editor.graph;
+
+	if (evt != null && cell != null && graph.model.isEdge(cell))
+	{
+		var state = graph.view.getState(cell);
+
+		if (state != null && state.absolutePoints != null &&
+			state.absolutePoints.length >= 2)
+		{
+			var pt = mxUtils.convertPoint(graph.container,
+				mxEvent.getClientX(evt), mxEvent.getClientY(evt));
+			var tol = graph.tolerance + mxConstants.HANDLE_SIZE;
+
+			for (var i = 0; i < 2; i++)
+			{
+				var source = (i == 0);
+
+				if (graph.model.getTerminal(cell, source) == null)
+				{
+					var abs = state.absolutePoints[source ? 0 :
+						state.absolutePoints.length - 1];
+
+					if (abs != null && Math.abs(abs.x - pt.x) <= tol &&
+						Math.abs(abs.y - pt.y) <= tol)
+					{
+						return {point: abs.clone(), source: source};
+					}
+				}
+			}
+		}
+	}
+
+	return null;
+};
+
+/**
+ * Shows the shape picker at an unconnected edge terminal and connects the
+ * picked shape to that terminal. Replaces the default insert-label / remove-
+ * point behaviour for double clicks on a dangling edge endpoint or its handle.
+ * The point is in absolute (scaled) coordinates.
+ */
+EditorUi.prototype.showShapePickerForEdgeTerminal = function(edge, source, point)
+{
+	var ui = this;
+	var graph = this.editor.graph;
+
+	this.showShapePicker(point.x, point.y, null, mxUtils.bind(this, function(clone)
+	{
+		if (clone != null)
+		{
+			var geo = clone.geometry;
+
+			if (geo != null)
+			{
+				// Centers the new shape on the edge terminal point
+				geo.x = graph.snap(Math.round(point.x / graph.view.scale) -
+					graph.view.translate.x - geo.width / 2);
+				geo.y = graph.snap(Math.round(point.y / graph.view.scale) -
+					graph.view.translate.y - geo.height / 2);
+			}
+
+			graph.model.beginUpdate();
+			try
+			{
+				graph.addCell(clone);
+
+				if (graph.model.isVertex(clone) && graph.isAutoSizeCell(clone))
+				{
+					graph.updateCellSize(clone);
+				}
+
+				// Connects the unconnected edge terminal to the new shape
+				graph.model.setTerminal(edge, clone, source);
+
+				// Clears the now obsolete fixed terminal point
+				var egeo = graph.getCellGeometry(edge);
+
+				if (egeo != null && egeo.getTerminalPoint(source) != null)
+				{
+					egeo = egeo.clone();
+					egeo.setTerminalPoint(null, source);
+					graph.model.setGeometry(edge, egeo);
+				}
+			}
+			finally
+			{
+				graph.model.endUpdate();
+			}
+
+			graph.setSelectionCell(clone);
+			graph.scrollCellToVisible(clone);
+			graph.startEditing(clone);
+
+			if (ui.hoverIcons != null)
+			{
+				ui.hoverIcons.update(graph.view.getState(clone));
+			}
+		}
+	}), null, false, null, false, false,
+		this.getCellsForShapePicker(null, false, false), {cell: edge, source: source});
+};
+
+/**
  * Creates a temporary graph instance for rendering off-screen content.
  */
 EditorUi.prototype.centerShapePicker = function(div, rect, x, y, dir)
@@ -2202,19 +2364,20 @@ EditorUi.prototype.centerShapePicker = function(div, rect, x, y, dir)
  * Creates a temporary graph instance for rendering off-screen content.
  */
 EditorUi.prototype.showShapePicker = function(x, y, source, callback, direction, hovering,
-	getInsertLocationFn, showEdges, startEditing)
+	getInsertLocationFn, showEdges, startEditing, cells, connectEdge)
 {
 	var div = null;
 
 	if (!this.editor.graph.freehand.isDrawing())
 	{
 		showEdges = showEdges || source == null;
+		cells = (cells != null) ? cells :
+			this.getCellsForShapePicker(source, hovering, showEdges);
 
 		div = this.createShapePicker(x, y, source, callback, direction, mxUtils.bind(this, function()
-		{	
+		{
 			this.hideShapePicker();
-		}), this.getCellsForShapePicker(source, hovering, showEdges), hovering,
-			getInsertLocationFn, showEdges, startEditing);
+		}), cells, hovering, getInsertLocationFn, showEdges, startEditing, connectEdge);
 		
 		if (div != null)
 		{
@@ -2241,7 +2404,7 @@ EditorUi.prototype.showShapePicker = function(x, y, source, callback, direction,
  * Creates a temporary graph instance for rendering off-screen content.
  */
 EditorUi.prototype.createShapePicker = function(x, y, source, callback, direction,
-	afterClick, cells, hovering, getInsertLocationFn, showEdges, startEditing)
+	afterClick, cells, hovering, getInsertLocationFn, showEdges, startEditing, connectEdge)
 {
 	startEditing = (startEditing != null) ? startEditing : true;
 	var graph = this.editor.graph;
@@ -2405,7 +2568,7 @@ EditorUi.prototype.createShapePicker = function(x, y, source, callback, directio
 
 						mxEvent.consume(evt);
 					}
-				}), 25, 25, null, null, source);
+				}), 25, 25, null, null, source, connectEdge);
 				temp.style.display = 'flex';
 				temp.style.alignItems = 'center';
 				temp.style.justifyContent = 'center';
@@ -5738,6 +5901,13 @@ EditorUi.prototype.updateActionStates = function()
 	this.actions.get('lockUnlock').setEnabled(!graph.isSelectionEmpty());
 	this.actions.get('bringForward').setEnabled(ss.cells.length == 1);
 	this.actions.get('sendBackward').setEnabled(ss.cells.length == 1);
+	var alignDistributeActions = ['alignCellsLeft', 'alignCellsCenter', 'alignCellsRight',
+		'alignCellsTop', 'alignCellsMiddle', 'alignCellsBottom',
+		'distributeHorizontal', 'distributeVertical'];
+	for (var ai = 0; ai < alignDistributeActions.length; ai++)
+	{
+		this.actions.get(alignDistributeActions[ai]).setEnabled(ss.unlocked && ss.vertices.length > 1);
+	}
 	this.actions.get('rotation').setEnabled(ss.vertices.length == 1);
 	this.actions.get('wordWrap').setEnabled(ss.vertices.length == 1);
 	this.actions.get('autosize').setEnabled(ss.vertices.length > 0);

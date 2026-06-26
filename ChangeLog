@@ -1,3 +1,42 @@
+24-JUN-2026: 30.2.6
+
+- Reduces verbosity of build output
+- Adds automatic tangent rotation for edge labels [jgraph/drawio#5365]
+- Updates i18n submodule for Greenlandic autoRotateLabel fix [jgraph/drawio#5365]
+- Updates i18n submodule for Edge capitalization [jgraph/drawio#5365]
+- Fixes rotate handle showing on rotated auto-rotate labels [jgraph/drawio#5365]
+- Fix Org Chart layout dialog row spacing
+- Refresh drawio-elk bundle: radial/organic layouts keep edges straight
+- Fixes edge double-click not adding label in transparentBounds groups
+- Fix exported SVG black background in browsers without light-dark() [jgraph/drawio]
+- Route all adaptive light-dark colors through --ge-adaptive-bg in SVG export [jgraph/drawio]
+- Harden convert-to-SVG check against stored XSS (editable=0 labels)
+- Add edge fill/gradient color to inline toolbar; fix color picker selection binding
+- Sync inline toolbar color picker to live selection
+- Sync style panel color picker to "none" when new selection lacks the color
+- Harden convert-to-SVG check against stored XSS (editable=0 labels)
+- Keep mermaid insert dialog open on parse failure
+- Add swimlaneSelectionEnabled config switch
+- fix: upgrade org.apache.commons:commons-lang3 from 3.18 to 3.20.0
+- fix: upgrade commons-codec:commons-codec from 1.15 to 1.22.0
+- Add align/distribute as named actions for omnisearch [jgraph/drawio#5418]
+- Hide inactive resize handles when resizing groups
+- Hide deleteAll in pages dropdown in lightbox
+- Show shape picker on double click of unconnected edge terminal
+- Fix convert-to-SVG export overflow anchoring for wrapped clipped labels
+- Show user icon and account panel entry after MS365 login
+- Enable turn action for swimlane lanes inside tables
+- Fixes border frame of format panel with rulers
+- Reserve format panel scrollbar gutter to stop content squeeze
+- Restore Mermaid image insert option [jgraph/drawio#5643]
+- Decouple vertex and edge default text styles [jgraph/drawio#5538]
+- Add Label Width control to Text format panel [jgraph/drawio-desktop#2452]
+- Make dialog form-section spacing consistent across export dialogs
+- Add Search Images option to shape search omnibox [jgraph/drawio#5294]
+- Fix infinite refresh loop when tabbing edge point inputs in Format panel
+- Updates perfect-freehand to 1.2.3
+- Updates crypto-js readme
+
 19-JUN-2026: 30.2.5
 
 - fix(sidebar): pass title element to onInit in expanded addPalette path

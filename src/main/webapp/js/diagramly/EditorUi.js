@@ -283,6 +283,13 @@
 	};
 
 	/**
+	 * Default padding (px) drawn around mermaid image cells, matching the small
+	 * margin the legacy upstream-rendered images had (their content sat ~8px
+	 * from each edge). Overridable per cell via the mermaidData `border` field.
+	 */
+	EditorUi.mermaidImageBorder = 8;
+
+	/**
 	 * Updates action states depending on the selection.
 	 */
 	EditorUi.logError = function(message, url, linenumber, colno, err, severity, quiet)
@@ -6422,7 +6429,7 @@
 		optSection.className = 'geDialogSection';
 
 		var transparent = this.addCheckbox(optSection, mxResources.get('transparentBackground',
-			null, 'Transparent Background'), false);
+			null, 'Transparent Background'), false, null, null, null, null, null, true);
 
 		div.appendChild(optSection);
 
@@ -8883,15 +8890,16 @@
 
 		var selection = this.addCheckbox(optSection, mxResources.get('selectionOnly'),
 			this.lastExportSelectionOnly && !this.editor.graph.isSelectionEmpty(),
-			this.editor.graph.isSelectionEmpty());
+			this.editor.graph.isSelectionEmpty(), null, null, null, null, true);
 		var include = (hideInclude) ? null :
 			this.addCheckbox(optSection, mxResources.get('includeCopyOfMyDiagram'),
-				Editor.defaultIncludeDiagram);
+				Editor.defaultIncludeDiagram, null, null, null, null, null, true);
 
 		var graph = this.editor.graph;
 		var transparent = (hideInclude) ? null :
 			this.addCheckbox(optSection, mxResources.get('transparentBackground'),
-				graph.background == mxConstants.NONE || graph.background == null);
+				graph.background == mxConstants.NONE || graph.background == null,
+				null, null, null, null, null, true);
 
 		div.appendChild(optSection);
 
@@ -8948,7 +8956,7 @@
 
 		var selection = this.addCheckbox(optSection, mxResources.get('selectionOnly'),
 			this.lastExportSelectionOnly && !graph.isSelectionEmpty(),
-			graph.isSelectionEmpty());
+			graph.isSelectionEmpty(), null, null, null, null, true);
 
 		var cb6 = document.createElement('input');
 		cb6.setAttribute('disabled', 'disabled');
@@ -8996,7 +9004,6 @@
 		{
 			var cropRow = document.createElement('div');
 			cropRow.className = 'geDialogCheckRow';
-			cropRow.style.marginTop = '8px';
 			cropRow.appendChild(cb6);
 			var cropLbl = document.createElement('label');
 			mxUtils.write(cropLbl, mxResources.get('crop'));
@@ -9018,11 +9025,10 @@
 
 		if (graph.isSelectionEmpty())
 		{
-			if (exportOption)
+			if (exportOption && selection.checkRow != null &&
+				selection.checkRow.parentNode != null)
 			{
-				selection.style.display = 'none';
-				selection.nextSibling.style.display = 'none';
-				selection.nextSibling.nextSibling.style.display = 'none';
+				selection.checkRow.parentNode.removeChild(selection.checkRow);
 			}
 		}
 		else
@@ -9046,7 +9052,8 @@
 				
 		var defaultTransparent = false; /*graph.background == mxConstants.NONE || graph.background == null*/;
 		var transparent = this.addCheckbox(optSection, mxResources.get('transparentBackground'),
-			defaultTransparent, null, null, format != 'jpeg' && format != 'webp');
+			defaultTransparent, null, null, format != 'jpeg' && format != 'webp',
+			null, null, true);
 
 		div.appendChild(optSection);
 
@@ -11466,9 +11473,12 @@
 	};
 
 	/**
-	 * Generates a Mermaid image.
+	 * Renders the given diagram XML to an SVG element via a temporary graph.
+	 * An optional border (px, at scale 1) adds uniform padding around the
+	 * content — used by the Mermaid image path to match the small padding the
+	 * legacy upstream-rendered images had.
 	 */
-	EditorUi.prototype.getSvgForXml = function(xml)
+	EditorUi.prototype.getSvgForXml = function(xml, border)
 	{
 		var result = null;
 		var graph = this.createTemporaryGraph(this.editor.graph.getStylesheet());
@@ -11478,14 +11488,14 @@
 			document.body.appendChild(graph.container);
 			var codec = new mxCodec(mxUtils.parseXml(xml));
 			codec.decode(mxUtils.parseXml(xml).documentElement, graph.getModel());
-			result = graph.getSvg(null, null, null, null, null, null, null,
+			result = graph.getSvg(null, null, border, null, null, null, null,
 				null, null, null, null, null, null, null, true, true);
 		}
 		finally
 		{
 			document.body.removeChild(graph.container);
 		}
-		
+
 		return result;
 	};
 
@@ -12027,6 +12037,119 @@
 		config.maxTextSize = 900000;
 
 		return config;
+	};
+
+	/**
+	 * Renders the given parsed Mermaid XML (the output of parseMermaidDiagram)
+	 * to an SVG image and returns {data, width, height}, where data is a
+	 * semicolon-free data URI ready to be stored in a shape=image cell style.
+	 * The upstream Mermaid renderer is gone, so the image is draw.io's own SVG
+	 * rendering of the parsed cells (matching what the editable diagram shows).
+	 * The optional border (px, the mermaidData `border` field) defaults to
+	 * EditorUi.mermaidImageBorder when null/invalid.
+	 */
+	EditorUi.prototype.getMermaidImageForXml = function(parsedXml, border)
+	{
+		border = parseFloat(border);
+		border = isNaN(border) ? EditorUi.mermaidImageBorder : border;
+		var svgRoot = this.getSvgForXml(parsedXml, border);
+		var w = parseFloat(svgRoot.getAttribute('width'));
+		var h = parseFloat(svgRoot.getAttribute('height'));
+
+		if (isNaN(w) || isNaN(h))
+		{
+			try
+			{
+				var viewBox = svgRoot.getAttribute('viewBox').split(/\s+/);
+				w = parseFloat(viewBox[2]);
+				h = parseFloat(viewBox[3]);
+			}
+			catch (e)
+			{
+				// Falls through to the defaults below
+			}
+
+			// Any size such that it shows up
+			w = w || 100;
+			h = h || 100;
+		}
+
+		return {
+			data: this.convertDataUri(Editor.createSvgDataUri(mxUtils.getXml(svgRoot))),
+			width: w,
+			height: h
+		};
+	};
+
+	/**
+	 * Builds the XML for a shape=image cell that renders the given parsed
+	 * Mermaid XML as a static SVG image and carries the Mermaid source on
+	 * mermaidData (so double-click can re-edit it). Mirrors the legacy
+	 * image-based Mermaid insert that was removed with mermaid.min.js. The
+	 * optional border (px) is the configurable mermaidData `border` field;
+	 * when omitted the EditorUi.mermaidImageBorder default applies and no
+	 * border is stored (keeping the legacy {data, config} format).
+	 */
+	EditorUi.prototype.createMermaidImageXml = function(mermaidData, config, parsedXml, prompt, border)
+	{
+		var img = this.getMermaidImageForXml(parsedXml, border);
+		var graph = new Graph(document.createElement('div'));
+		var cell = graph.insertVertex(null, null, null, 0, 0, img.width, img.height,
+			'shape=image;noLabel=1;verticalAlign=top;imageAspect=1;image=' + img.data + ';');
+		graph.setAttributeForCell(cell, 'mermaidData', JSON.stringify(
+			{data: mermaidData, config: config, border: border}, null, 2));
+
+		if (prompt != null)
+		{
+			graph.setAttributeForCell(cell, 'templatePrompt', prompt);
+		}
+
+		var codec = new mxCodec();
+
+		return mxUtils.getXml(codec.encode(graph.getModel()));
+	};
+
+	/**
+	 * Parses the given Mermaid source and returns, via success, the XML for a
+	 * shape=image cell rendering the result (see createMermaidImageXml). Parses
+	 * with EditorUi.legacyMermaidConfig (the config previous versions used for
+	 * Mermaid images) so the image matches the legacy look; the stored config
+	 * stays null, matching legacy image cells (the double-click edit path uses
+	 * legacyMermaidConfig for image cells regardless of the stored config).
+	 */
+	EditorUi.prototype.parseMermaidImage = function(text, success, error)
+	{
+		this.parseMermaidDiagram(text, mxUtils.clone(EditorUi.legacyMermaidConfig),
+			mxUtils.bind(this, function(xml)
+		{
+			success(this.createMermaidImageXml(text, null, xml));
+		}), error);
+	};
+
+	/**
+	 * Re-renders a shape=image Mermaid cell from freshly-parsed Mermaid XML,
+	 * keeping it an image (style, size and mermaidData are updated in place).
+	 * Used by the double-click edit path so legacy/static image cells stay
+	 * images instead of being converted to editable diagrams. The border (px,
+	 * the mermaidData `border` field) is preserved across the re-render.
+	 */
+	EditorUi.prototype.updateMermaidImage = function(cell, text, config, parsedXml, border)
+	{
+		var graph = this.editor.graph;
+		var img = this.getMermaidImageForXml(parsedXml, border);
+		graph.setCellStyles('image', img.data, [cell]);
+		var geo = graph.model.getGeometry(cell);
+
+		if (geo != null)
+		{
+			geo = geo.clone();
+			geo.width = img.width;
+			geo.height = img.height;
+			graph.cellsResized([cell], [geo], false);
+		}
+
+		graph.setAttributeForCell(cell, 'mermaidData', JSON.stringify(
+			{data: text, config: config, border: border}, null, 2));
 	};
 
 	/**
@@ -13822,13 +13945,13 @@
 			var isImage = mxUtils.getValue(style, mxConstants.STYLE_SHAPE, '') ==
 				mxConstants.SHAPE_IMAGE;
 
-			// Legacy shape=image mermaid cells were rendered with the previous
-			// default config, now preserved as EditorUi.legacyMermaidConfig. Use
-			// it for the re-parse so the migrated group matches the old image and
-			// persist it into mermaidData so later edits stay consistent (new
-			// group cells keep their own stored config). The config is cloned per
-			// parse call below so getMermaidConfig's in-place edits (securityLevel,
-			// startOnLoad, ...) never mutate the shared template or get saved.
+			// shape=image mermaid cells (legacy static images and ones inserted
+			// via the Image option) were rendered with the previous default
+			// config, now preserved as EditorUi.legacyMermaidConfig. Use it for
+			// the re-parse so the re-rendered image matches the old one. The
+			// config is cloned per parse call below so getMermaidConfig's in-place
+			// edits (securityLevel, startOnLoad, ...) never mutate the shared
+			// template or get saved.
 			var config = isImage ? EditorUi.legacyMermaidConfig : obj.config;
 
 	    	var dlg = new SimpleTextareaDialog(ui, obj.data, function(text)
@@ -13860,10 +13983,17 @@
 	    				{
 	    					if (isImage)
 	    					{
-	    						graph.model.setStyle(cell, mxMermaidToDrawio.groupStyle);
+	    						// Keep image cells as images: re-render the SVG and
+	    						// update the cell in place rather than converting it
+	    						// into an editable diagram group. Stored config stays
+	    						// null (legacy image-cell format); see parseMermaidImage.
+	    						// The configurable mermaidData border is preserved.
+	    						ui.updateMermaidImage(cell, text, null, xml, obj.border);
 	    					}
-
-	    					ui.replaceLockedGroupChildren(cell, xml, text, config);
+	    					else
+	    					{
+	    						ui.replaceLockedGroupChildren(cell, xml, text, config);
+	    					}
 	    				}
 	    				finally
 	    				{
@@ -21779,25 +21909,11 @@
 							{
 								if (EditorUi.isMermaidSupported())
 								{
-									this.parseMermaidDiagram(data.data, null, mxUtils.bind(this, function(xml)
+									// Loads the parsed result (group, raw cells or image)
+									// and notifies the parent, regardless of how it was
+									// produced below.
+									var afterMermaid = mxUtils.bind(this, function(xml)
 									{
-										// Opt in per descriptor with wrap:true to wrap the
-										// result in the editable mermaid group (a re-openable
-										// group carrying the source), matching Insert >
-										// Mermaid. Default off for backwards compatibility:
-										// existing integrators load the raw parsed cells.
-										//
-										// normalize:true shifts the wrapped content so the
-										// group's padded bounds start at (0,0) — the diagram
-										// is loaded as a full file here (not imported at an
-										// insert point), so without this the groupPadding
-										// spills into negative space off the page origin.
-										if (data.wrap)
-										{
-											xml = mxMermaidToDrawio.wrapGroup(xml, data.data,
-												null, {normalize: true});
-										}
-
 										fn(xml, evt, null, convertToSketch);
 
 										// Post load event back to parent (doLoad is out of scope here)
@@ -21829,10 +21945,45 @@
 												}
 											}
 										}
-									}), mxUtils.bind(this, function(e)
+									});
+
+									var onMermaidError = mxUtils.bind(this, function(e)
 									{
 										this.handleError(e);
-									}));
+									});
+
+									if (data.image)
+									{
+										// Opt in per descriptor with image:true to load the
+										// parsed diagram as a static SVG image cell (carrying
+										// the mermaid source for re-editing), matching the
+										// legacy image insert. Uses the previous mermaid config.
+										this.parseMermaidImage(data.data, afterMermaid, onMermaidError);
+									}
+									else
+									{
+										this.parseMermaidDiagram(data.data, null, mxUtils.bind(this, function(xml)
+										{
+											// Opt in per descriptor with wrap:true to wrap the
+											// result in the editable mermaid group (a re-openable
+											// group carrying the source), matching Insert >
+											// Mermaid. Default off for backwards compatibility:
+											// existing integrators load the raw parsed cells.
+											//
+											// normalize:true shifts the wrapped content so the
+											// group's padded bounds start at (0,0) — the diagram
+											// is loaded as a full file here (not imported at an
+											// insert point), so without this the groupPadding
+											// spills into negative space off the page origin.
+											if (data.wrap)
+											{
+												xml = mxMermaidToDrawio.wrapGroup(xml, data.data,
+													null, {normalize: true});
+											}
+
+											afterMermaid(xml);
+										}), onMermaidError);
+									}
 								}
 								else
 								{

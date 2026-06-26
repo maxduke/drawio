@@ -366,6 +366,11 @@ div[id*="dgeMermaidOutput-"] {
 .geFormatTitleContainer {
 	height: 34px;
 	margin-bottom: 12px;
+	/* Bleed back across the scrollbar gutter reserved on .geFormatContainer so
+	   the tabs span the full panel width (the gutter is a right margin for the
+	   inset content panels only, not the full-bleed tab header). Keep in sync
+	   with the ::-webkit-scrollbar width. */
+	margin-right: -10px;
 }
 
 .geFormatTitle {
@@ -419,7 +424,7 @@ div[id*="dgeMermaidOutput-"] {
 
 .geFormatContent {
 	margin-left: 12px;
-	margin-right: 8px;
+	margin-right: 0;
 }
 
 div.geActivePage {
@@ -1024,6 +1029,12 @@ html div.mxWindow.mxWindowDocked {
 
 div.geFormatContainer {
 	overflow-y: auto;
+	/* Reserve the scrollbar gutter so the panel width does not jump (and the
+	   right-anchored color controls do not get squeezed) when the styled
+	   scrollbar appears. The custom ::-webkit-scrollbar makes it a classic,
+	   space-consuming bar, so the gutter is the panel's effective right margin
+	   - hence margin-right: 0 on .geFormatContent below. */
+	scrollbar-gutter: stable;
 	font-size: 12px;
 	width: 240px;
 }
@@ -1847,7 +1858,12 @@ a.geStatus>div {
 	position: relative;
 	align-items: center;
 	white-space: nowrap;
-	overflow: hidden;
+	/* clip (not hidden) plus a small margin so the focus ring of a left-aligned
+	   checkbox is not cut off. The label self-truncates via .geStyleLabel, so
+	   this only needs to clip content overflowing to the right; the 2px bleed
+	   lands in the 12px .geFormatContent left margin with no layout shift. */
+	overflow: clip;
+	overflow-clip-margin: 4px;
 	min-height: 28px;
 }
 
@@ -2131,7 +2147,7 @@ a.geStatus>div {
 
 .geDialogSection > input[type="checkbox"],
 .geDialogSection > input[type="radio"] {
-	margin-top: 8px !important;
+	margin-top: 6px !important;
 }
 
 .geDialogSection > input[type="checkbox"]:first-child,
@@ -2144,18 +2160,6 @@ a.geStatus>div {
 	align-items: center;
 	min-height: 28px;
 	column-gap: 8px;
-}
-
-.geDialogFormRow + .geDialogFormRow {
-	margin-top: 6px;
-}
-
-.geDialogSection > .geDialogFormRow {
-	margin-top: 6px;
-}
-
-.geDialogSection > .geDialogFormRow:first-child {
-	margin-top: 0;
 }
 
 .geDialogFormLabel {
@@ -2178,12 +2182,17 @@ a.geStatus>div {
 	min-height: 28px;
 }
 
-.geDialogCheckRow + .geDialogCheckRow {
-	margin-top: 2px;
+/* Uniform vertical spacing between rows in a section, regardless of row type */
+.geDialogSection > .geDialogFormRow,
+.geDialogSection > .geDialogCheckRow,
+.geDialogSection > .geDialogInlineFields {
+	margin-top: 6px;
 }
 
-.geDialogFormRow + .geDialogCheckRow {
-	margin-top: 6px;
+.geDialogSection > .geDialogFormRow:first-child,
+.geDialogSection > .geDialogCheckRow:first-child,
+.geDialogSection > .geDialogInlineFields:first-child {
+	margin-top: 0;
 }
 
 .geDialogCheckRow input[type="checkbox"],

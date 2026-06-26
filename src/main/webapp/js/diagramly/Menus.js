@@ -1478,19 +1478,34 @@
 				};
 
 				var div = document.createElement('div');
-				
-				var title = document.createElement('div');
-				title.style.marginTop = '6px';
-				title.style.display = 'inline-block';
-				title.style.width = '180px';
-				mxUtils.write(title, mxResources.get('orgChartType') + ': ');
-				
-				div.appendChild(title);
-				
+
+				// Each label + control sits on its own block row with a bottom
+				// margin, so the rows keep a consistent vertical rhythm. The old
+				// inline-block flow gave the rows no inter-row spacing (the
+				// label marginTop only nudged vertical-align within a row), so
+				// the dropdown row sat cramped against the row below it.
+				var addRow = function(labelKey, control)
+				{
+					var row = document.createElement('div');
+					row.style.marginBottom = '8px';
+
+					var label = document.createElement('div');
+					label.style.display = 'inline-block';
+					label.style.width = '180px';
+					label.style.verticalAlign = 'middle';
+					mxUtils.write(label, mxResources.get(labelKey) + ': ');
+					row.appendChild(label);
+
+					control.style.width = '160px';
+					control.style.boxSizing = 'border-box';
+					control.style.verticalAlign = 'middle';
+					row.appendChild(control);
+
+					div.appendChild(row);
+				};
+
 				var typeSelect = document.createElement('select');
-				typeSelect.style.width = '160px';
-				typeSelect.style.boxSizing = 'border-box';
-				
+
 				//Types are hardcoded here since the code is not loaded yet
 				var typesArr = [mxResources.get('linear'),
 					mxResources.get('hanger2'),
@@ -1501,65 +1516,49 @@
 					mxResources.get('1ColumnRight'),
 					mxResources.get('smart')
 				];
-				
+
 				for (var i = 0; i < typesArr.length; i++)
 				{
 					var option = document.createElement('option');
 					mxUtils.write(option, typesArr[i]);
 					option.value = i;
-					
+
 					if (i == 2)
 					{
 						option.setAttribute('selected', 'selected');
 					}
-					
+
 					typeSelect.appendChild(option);
 				}
-					
+
 				mxEvent.addListener(typeSelect, 'change', function()
 				{
 					branchOptimizer = typeSelect.value;
 				});
-				
-				div.appendChild(typeSelect);
-				
-				title = document.createElement('div');
-				title.style.marginTop = '6px';
-				title.style.display = 'inline-block';
-				title.style.width = '180px';
-				mxUtils.write(title, mxResources.get('parentChildSpacing') + ': ');
-				div.appendChild(title);
-				
+
+				addRow('orgChartType', typeSelect);
+
 				var parentChildSpacing = document.createElement('input');
 				parentChildSpacing.type = 'number';
 				parentChildSpacing.value = parentChildSpacingVal;
-				parentChildSpacing.style.width = '160px';
-				parentChildSpacing.style.boxSizing = 'border-box';
-				div.appendChild(parentChildSpacing);
-				
+
 				mxEvent.addListener(parentChildSpacing, 'change', function()
 				{
 					parentChildSpacingVal = parentChildSpacing.value;
 				});
-				
-				title = document.createElement('div');
-				title.style.marginTop = '6px';
-				title.style.display = 'inline-block';
-				title.style.width = '180px';
-				mxUtils.write(title, mxResources.get('siblingSpacing') + ': ');
-				div.appendChild(title);
-				
+
+				addRow('parentChildSpacing', parentChildSpacing);
+
 				var siblingSpacing = document.createElement('input');
 				siblingSpacing.type = 'number';
 				siblingSpacing.value = siblingSpacingVal;
-				siblingSpacing.style.width = '160px';
-				siblingSpacing.style.boxSizing = 'border-box';
-				div.appendChild(siblingSpacing);
-				
+
 				mxEvent.addListener(siblingSpacing, 'change', function()
 				{
 					siblingSpacingVal = siblingSpacing.value;
 				});
+
+				addRow('siblingSpacing', siblingSpacing);
 
 				// The legacy "Custom…" escape hatch is gone now that the Custom
 				// Layout dialog has its own Add dropdown — picking Org Chart
@@ -5023,29 +5022,32 @@
 					}))(i);
 				}
 
-				menu.addSeparator(parent);
-
-				menu.addItem(mxResources.get('deleteAll'), null, mxUtils.bind(this, function()
+				if (!editorUi.editor.graph.isLightboxView())
 				{
-					graph.getModel().beginUpdate();	
-					try
-					{	
-						for (var i = editorUi.pages.length; i >= 0; i--)
-						{
-							editorUi.removePage(editorUi.pages[i]);
-						}
-					}
-					catch (e)
-					{
-						editorUi.handleError(e);
-					}
-					finally
-					{
-						graph.getModel().endUpdate();
-					}
+					menu.addSeparator(parent);
 
-					editorUi.actions.get('resetView').funct();
-				}), parent, null, editorUi.editor.graph.isEnabled());
+					menu.addItem(mxResources.get('deleteAll'), null, mxUtils.bind(this, function()
+					{
+						graph.getModel().beginUpdate();
+						try
+						{
+							for (var i = editorUi.pages.length; i >= 0; i--)
+							{
+								editorUi.removePage(editorUi.pages[i]);
+							}
+						}
+						catch (e)
+						{
+							editorUi.handleError(e);
+						}
+						finally
+						{
+							graph.getModel().endUpdate();
+						}
+
+						editorUi.actions.get('resetView').funct();
+					}), parent, null, editorUi.editor.graph.isEnabled());
+				}
 			}
 		})));
 		

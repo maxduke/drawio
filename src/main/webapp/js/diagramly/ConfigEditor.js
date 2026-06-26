@@ -106,7 +106,8 @@ DrawioConfigEditor.install = function(container, options)
 			{ key: 'showLinkIcons', name: 'Show Link Icons', help: 'Show link icons on shapes' },
 			{ key: 'showTooltipIcons', name: 'Show Tooltip Icons', help: 'Show tooltip icons on shapes' },
 			{ key: 'showConnectHandle', name: 'Show Connect Handle', help: 'Show connection handle on hover' },
-			{ key: 'intersectionSelect', name: 'Intersection Select', help: 'Select cells by intersection rather than containment' }
+			{ key: 'intersectionSelect', name: 'Intersection Select', help: 'Select cells by intersection rather than containment' },
+			{ key: 'swimlaneSelectionEnabled', name: 'Swimlane Body Selection', help: 'Click an empty swimlane body to select the swimlane (default on)' }
 		],
 		'appearance-toggles': [
 			{ key: 'enableCssDarkMode', name: 'CSS Dark Mode', help: 'Use CSS for dark mode rendering' },

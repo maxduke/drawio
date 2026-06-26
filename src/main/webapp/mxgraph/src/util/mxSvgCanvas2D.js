@@ -2324,6 +2324,7 @@ mxSvgCanvas2D.prototype.wrapSvgTextElement = function(textEl, maxWidth)
 	{
 		var token = tokens[i];
 		var w = measureWord(token);
+		token.width = w;
 
 		if (token.isSpace)
 		{
@@ -2359,9 +2360,42 @@ mxSvgCanvas2D.prototype.wrapSvgTextElement = function(textEl, maxWidth)
 		lineWidth += w;
 	}
 
+	// Widest rendered line (trailing whitespace trimmed), measured with the
+	// same canvas metrics used for the wrap decision. adjustBlockTextOverflow
+	// uses this as the content width to start-anchor overflowing clipped text,
+	// so the overflow shift works without getBBox (which returns nothing when
+	// the group is not in the live document, e.g. during SVG export).
+	var maxLineWidth = 0;
+
+	for (var li = 0; li < lines.length; li++)
+	{
+		var measuredLine = lines[li];
+		var lineEnd = measuredLine.length;
+
+		while (lineEnd > 0 && measuredLine[lineEnd - 1].isSpace)
+		{
+			lineEnd--;
+		}
+
+		var measuredWidth = 0;
+
+		for (var lk = 0; lk < lineEnd; lk++)
+		{
+			measuredWidth += measuredLine[lk].width;
+		}
+
+		if (measuredWidth > maxLineWidth)
+		{
+			maxLineWidth = measuredWidth;
+		}
+	}
+
 	if (lines.length <= 1)
 	{
-		return null;
+		// No wrapping needed, but expose the single-line width so block-mode
+		// overflow anchoring still works for unbreakable content wider than
+		// the cell.
+		return {elements: null, totalHeight: 0, maxLineWidth: maxLineWidth};
 	}
 
 	// Step 5: Build SVG text elements for each line with proper styling.
@@ -2520,7 +2554,8 @@ mxSvgCanvas2D.prototype.wrapSvgTextElement = function(textEl, maxWidth)
 
 	return {
 		elements: result,
-		totalHeight: cursorY
+		totalHeight: cursorY,
+		maxLineWidth: maxLineWidth
 	};
 };
 
@@ -2529,7 +2564,8 @@ mxSvgCanvas2D.prototype.wrapSvgTextElement = function(textEl, maxWidth)
  *
  * Wraps text within each <text> element of a block-mode group. Replaces
  * wide text elements with multiple wrapped lines and adjusts y positions.
- * Modifies the group and offset.textHeight in place.
+ * Modifies the group and offset.textHeight in place, and sets
+ * offset.maxLineWidth to the widest rendered line across all blocks.
  */
 mxSvgCanvas2D.prototype.wrapSvgBlockElements = function(group, maxWidth, offset)
 {
@@ -2546,6 +2582,7 @@ mxSvgCanvas2D.prototype.wrapSvgBlockElements = function(group, maxWidth, offset)
 	}
 
 	var heightDelta = 0;
+	var maxLineWidth = 0;
 
 	for (var i = 0; i < children.length; i++)
 	{
@@ -2553,7 +2590,14 @@ mxSvgCanvas2D.prototype.wrapSvgBlockElements = function(group, maxWidth, offset)
 		var blockFontSize = parseFloat(textEl.getAttribute('font-size')) || fontSize;
 		var wrapped = this.wrapSvgTextElement(textEl, maxWidth);
 
-		if (wrapped != null)
+		// Tracks the widest line across all blocks (set whether or not the
+		// block itself wrapped) for the overflow anchoring in plainText.
+		if (wrapped != null && wrapped.maxLineWidth > maxLineWidth)
+		{
+			maxLineWidth = wrapped.maxLineWidth;
+		}
+
+		if (wrapped != null && wrapped.elements != null)
 		{
 			var origY = parseFloat(textEl.getAttribute('y')) || 0;
 			origY += heightDelta;
@@ -2620,6 +2664,8 @@ mxSvgCanvas2D.prototype.wrapSvgBlockElements = function(group, maxWidth, offset)
 	{
 		offset.textHeight += heightDelta;
 	}
+
+	offset.maxLineWidth = maxLineWidth;
 };
 
 /**
@@ -2670,13 +2716,22 @@ mxSvgCanvas2D.prototype.text = function(x, y, w, h, str, align, valign, wrap, fo
 								w + this.foreignObjectPadding, offset);
 						}
 
-						// Measures HTML content width for overflow adjustment.
-						// When word wrap is active, text has been wrapped to fit w,
-						// so we skip the unwrapped measurement and let
-						// adjustBlockTextOverflow use getBBox for the actual width.
+						// Measures HTML content width for overflow adjustment so
+						// centered/right clipped content wider than the cell is
+						// start-anchored (matching HTML overflow:hidden). For
+						// wrapped text this is the widest wrapped line, already
+						// measured by wrapSvgBlockElements with the same canvas
+						// metrics used for the wrap decision; for non-wrapped
+						// text it is measured from the live DOM. Both avoid
+						// getBBox, which is unavailable during SVG export.
 						var htmlContentWidth = null;
 
-						if (!wrap && clip && (align == mxConstants.ALIGN_CENTER ||
+						if (wrap)
+						{
+							htmlContentWidth = (offset.maxLineWidth != null) ?
+								offset.maxLineWidth : null;
+						}
+						else if (clip && (align == mxConstants.ALIGN_CENTER ||
 							align == mxConstants.ALIGN_RIGHT))
 						{
 							htmlContentWidth = this.measureHtmlContentWidth(
@@ -2695,7 +2750,7 @@ mxSvgCanvas2D.prototype.text = function(x, y, w, h, str, align, valign, wrap, fo
 							var wrapped = this.wrapSvgTextElement(text,
 								w + this.foreignObjectPadding);
 
-							if (wrapped != null)
+							if (wrapped != null && wrapped.elements != null)
 							{
 								var group = this.createElement('g');
 
@@ -2704,11 +2759,11 @@ mxSvgCanvas2D.prototype.text = function(x, y, w, h, str, align, valign, wrap, fo
 									group.appendChild(wrapped.elements[i]);
 								}
 
-								// Word wrap was applied, so skip unwrapped width
-								// measurement (see block mode comment above)
+								// Word wrap applied: pass the widest wrapped line (canvas-measured)
+								// as content width so overflow anchoring works without getBBox.
 								this.plainText(x + this.state.dx, y + this.state.dy, w, h, '',
 									align, valign, wrap, overflow, clip, rotation, dir, group,
-									null, wrapped.totalHeight, null);
+									null, wrapped.totalHeight, wrapped.maxLineWidth);
 
 								return;
 							}

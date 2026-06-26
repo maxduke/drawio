@@ -1257,7 +1257,14 @@ BaseFormatPanel.prototype.createColorOption = function(label, getColorFn, setCol
 		}, (defaultColor == 'default') ? 'default' : null,
 			actualDefaultValue, singleColorMode, title || label, function()
 		{
-			return getActualColorValue(getColorFn(), true);
+			// Returns NONE rather than null when the new selection has no value
+			// for this key, so the open (non-modal) color window updates to
+			// "none" instead of keeping the previous selection's color, e.g.
+			// switching to a shape with no gradient or one that has no fill.
+			// ColorWindow.refreshColor ignores null, so null would be stale.
+			var refreshValue = getActualColorValue(getColorFn(), true);
+
+			return (refreshValue != null) ? refreshValue : mxConstants.NONE;
 		});
 
 		mxEvent.consume(evt);
@@ -2374,7 +2381,7 @@ ArrangePanel.prototype.addAngle = function(div)
 };
 
 /**
- * 
+ *
  */
 BaseFormatPanel.prototype.getUnit = function(prefix)
 {
@@ -3180,7 +3187,13 @@ ArrangePanel.prototype.addEdgeGeometryHandler = function(input, fn)
     mxEvent.addListener(input, 'change', update);
     mxEvent.addListener(input, 'focus', function()
     {
-        initialValue = input.value;
+        // Stores the parsed number (not the "360 pt" string) so the
+        // value != initialValue guard in update can detect an unchanged
+        // value. Comparing a number against the formatted string always
+        // reported a change, firing a spurious setGeometry on every blur;
+        // combined with the focus restore in immediateRefresh that turned
+        // tabbing out of these inputs into an infinite refresh loop.
+        initialValue = parseFloat(input.value);
     });
 
     return update;
@@ -3731,6 +3744,12 @@ TextFormatPanel.prototype.addFont = function(container)
 	mxUtils.write(stylePanel5, mxResources.get('writingDirection'));
 	stylePanel5.setAttribute('title', mxResources.get('writingDirection'));
 
+	// This is the last borderless dropdown row before the color section divider.
+	// geFormatEntry rows have no vertical padding, so without a nudge the divider
+	// hugs the dropdown. Add a small bottom margin so the gap below the dropdown
+	// matches the gap above it (the spacing between the two dropdown rows).
+	stylePanel5.style.marginBottom = '2px';
+
 	// Adds writing direction options
 	// LATER: Handle reselect of same option in all selects (change event
 	// is not fired for same option so have opened state on click) and
@@ -4088,10 +4107,27 @@ TextFormatPanel.prototype.addFont = function(container)
 	});
 	convertToSvg.style.fontWeight = 'bold';
 	extraPanel.appendChild(convertToSvg);
-	
+
+	// Aligns the label tangentially to its connector (edges and edge labels
+	// only). Overrides the manual angle in the Arrange tab while active.
+	if (Editor.enableAutoRotateLabels &&
+		((ss.edges.length == 1 && ss.vertices.length == 0) ||
+		(ss.containsLabel && ss.edges.length == 0)))
+	{
+		var autoRotate = this.createCellOption(mxResources.get('autoRotateLabel'),
+			'labelAutoRotate', '0', '1', '0');
+		autoRotate.style.fontWeight = 'bold';
+		extraPanel.appendChild(autoRotate);
+	}
+
 	var convertInput = convertToSvg.getElementsByTagName('input')[0];
 
-	if (!formatted)
+	// Wrapped plain text (whiteSpace=wrap) renders via foreignObject like html=1,
+	// so it can be converted to SVG; only unwrapped plain text renders as native
+	// SVG already and has nothing to convert. Mirrors graph.isHtmlLabel.
+	var htmlLabel = formatted || ss.style[mxConstants.STYLE_WHITE_SPACE] == 'wrap';
+
+	if (!htmlLabel)
 	{
 		// Keeps a checked option enabled so that it can be unchecked
 		if (!convertInput.checked)
@@ -4111,25 +4147,26 @@ TextFormatPanel.prototype.addFont = function(container)
 		for (var i = 0; i < cells.length && !hasUnsupported; i++)
 		{
 			var cellState = graph.view.getState(cells[i]);
-			var label = (cellState != null) ? graph.cellRenderer.getLabelValue(cellState) : null;
 
-			// Escapes plain-text labels before they are parsed as HTML below.
-			// getLabelValue only sanitizes HTML labels (html=1 or whiteSpace=wrap)
-			// and returns the raw value for plain-text cells, so an editable=0
-			// plain-text sibling can smuggle a raw label into canConvertHtmlToSvg
-			// (which assigns it to innerHTML). See the same guard used for label
-			// measurement in Graph.updateCellSize and mxText.updateValue.
-			if (label != null && label.length > 0 && !graph.isHtmlLabel(cells[i]))
+			// Only labels with HTML markup (html=1) can contain tags or vertical
+			// writing modes that have no native SVG equivalent; plain-text labels
+			// have nothing to convert and stay enabled, including whiteSpace=wrap
+			// (which renders via foreignObject but holds no HTML). Gating on html=1
+			// also keeps unsanitized labels out of canConvertHtmlToSvg (which
+			// assigns to innerHTML): getLabelValue runs DOMPurify only for html=1,
+			// so an editable=0 plain-text sibling can no longer smuggle a raw label
+			// into the dry-run conversion below (stored XSS on file open).
+			if (cellState != null && mxUtils.getValue(cellState.style, 'html', '0') == '1')
 			{
-				label = mxUtils.htmlEntities(label, false);
-			}
+				var label = graph.cellRenderer.getLabelValue(cellState);
 
-			if (label != null && label.length > 0 && !mxUtils.canConvertHtmlToSvg(label, {
-				dir: cellState.style[mxConstants.STYLE_TEXT_DIRECTION],
-				fontSize: mxUtils.getValue(cellState.style, mxConstants.STYLE_FONTSIZE,
-					mxConstants.DEFAULT_FONTSIZE)}))
-			{
-				hasUnsupported = true;
+				if (label != null && label.length > 0 && !mxUtils.canConvertHtmlToSvg(label, {
+					dir: cellState.style[mxConstants.STYLE_TEXT_DIRECTION],
+					fontSize: mxUtils.getValue(cellState.style, mxConstants.STYLE_FONTSIZE,
+						mxConstants.DEFAULT_FONTSIZE)}))
+				{
+					hasUnsupported = true;
+				}
 			}
 		}
 
@@ -4175,9 +4212,11 @@ TextFormatPanel.prototype.addFont = function(container)
 		}
 	}));
 	autosizeOpt.style.fontWeight = 'bold';
-	
-	// Word wrap in edge labels only supported via labelWidth style
-	if (ss.vertices.length > 0)
+
+	// Automatic font size scales the font to the cell bounds, so it is only
+	// meaningful when the cell can be resized (hidden for fixed-size labels
+	// such as edge labels with resizable=0)
+	if (ss.vertices.length > 0 && ss.resizable)
 	{
 		extraPanel.appendChild(autosizeOpt);
 	}
@@ -4230,10 +4269,62 @@ TextFormatPanel.prototype.addFont = function(container)
 	this.addLabel(spacingPanel, mxResources.get('left'), 158, 64);
 	this.addLabel(spacingPanel, mxResources.get('bottom'), 87, 64);
 	this.addLabel(spacingPanel, mxResources.get('right'), 16, 64);
-	
+
+	// Label width controls the wrapping width of the label independent of the
+	// shape size (the labelWidth style). An empty value removes the style so the
+	// label falls back to wrapping at the cell width.
+	var labelWidthPanel = this.createPanel();
+	labelWidthPanel.className = 'geFormatEntry';
+	labelWidthPanel.style.fontWeight = 'bold';
+	mxUtils.write(labelWidthPanel, mxResources.get('labelWidth'));
+	labelWidthPanel.setAttribute('title', mxResources.get('labelWidth'));
+
+	var labelWidthUpdate = mxUtils.bind(this, function(evt)
+	{
+		var value = (this.isFloatUnit()) ? parseFloat(labelWidth.value) : parseInt(labelWidth.value);
+		value = (isNaN(value)) ? null : Math.max(1, this.fromUnit(value));
+
+		if (value != mxUtils.getValue(ui.getSelectionState().style, mxConstants.STYLE_LABEL_WIDTH, null))
+		{
+			if (graph.isEditing())
+			{
+				graph.stopEditing(true);
+			}
+
+			var cells = ui.getSelectionState().cells;
+
+			graph.getModel().beginUpdate();
+			try
+			{
+				graph.setCellStyles(mxConstants.STYLE_LABEL_WIDTH, value, cells);
+				ui.fireEvent(new mxEventObject('styleChanged', 'keys', [mxConstants.STYLE_LABEL_WIDTH],
+					'values', [value], 'cells', cells));
+			}
+			finally
+			{
+				graph.getModel().endUpdate();
+			}
+		}
+
+		labelWidth.value = (value == null) ? '' : this.inUnit(value) + ' ' + this.getUnit();
+		mxEvent.consume(evt);
+	});
+
+	var labelWidth = this.addUnitInput(labelWidthPanel, this.getUnit(), 16, 52, function()
+	{
+		labelWidthUpdate.apply(this, arguments);
+	}, this.getUnitStep(), null, null, this.isFloatUnit());
+	labelWidth.setAttribute('title', mxResources.get('labelWidth'));
+
+	mxEvent.addListener(labelWidth, 'change', labelWidthUpdate);
+	mxEvent.addListener(labelWidth, 'blur', labelWidthUpdate);
+
 	if (!graph.cellEditor.isContentEditing())
 	{
-		container.appendChild(extraPanel);
+		var advancedSec = this.createCollapsibleSection(mxResources.get('advanced'), true);
+		advancedSec.contentDiv.appendChild(extraPanel);
+		advancedSec.contentDiv.appendChild(labelWidthPanel);
+		container.appendChild(advancedSec.wrapper);
 		var opacityPanel = this.createRelativeOption(mxResources.get('opacity'), mxConstants.STYLE_TEXT_OPACITY);
 		opacityPanel.style.borderTopStyle = 'solid';
 		opacityPanel.style.borderTopWidth = '1px';
@@ -4731,6 +4822,12 @@ TextFormatPanel.prototype.addFont = function(container)
 			var tmp = parseFloat(mxUtils.getValue(ss.style, mxConstants.STYLE_SPACING_LEFT, 0));
 			leftSpacing.value = (isNaN(tmp)) ? '' : this.inUnit(tmp) + ' ' + this.getUnit();
 		}
+
+		if (force || document.activeElement != labelWidth)
+		{
+			var tmp = parseFloat(mxUtils.getValue(ss.style, mxConstants.STYLE_LABEL_WIDTH, ''));
+			labelWidth.value = (isNaN(tmp)) ? '' : this.inUnit(tmp) + ' ' + this.getUnit();
+		}
 	});
 
 	globalUpdate = this.installInputHandler(globalSpacing, mxConstants.STYLE_SPACING, 2, -999, 999, 
@@ -4750,6 +4847,7 @@ TextFormatPanel.prototype.addFont = function(container)
 	this.addKeyHandler(rightSpacing, listener);
 	this.addKeyHandler(bottomSpacing, listener);
 	this.addKeyHandler(leftSpacing, listener);
+	this.addKeyHandler(labelWidth, listener);
 
 	graph.getModel().addListener(mxEvent.CHANGE, listener);
 	this.listeners.push({destroy: function() { graph.getModel().removeListener(listener); }});

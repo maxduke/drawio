@@ -363,6 +363,14 @@ Editor.showConnectHandle = false;
 Editor.enableInlineToolbar = true;
 
 /**
+ * Whether to show the "Automatic" (tangent) label rotation option in the
+ * Arrange > Rotation panel. The engine support (labelAutoRotate style) is
+ * always active so saved diagrams render correctly; this only gates the UI.
+ * Experimental, see jgraph/drawio#5365.
+ */
+Editor.enableAutoRotateLabels = true;
+
+/**
  * Returns the current state of the dark mode.
  */
 Editor.isDarkMode = function()

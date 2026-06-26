@@ -1880,7 +1880,67 @@
 			}))(res.images[i].url, res.images[i].width, res.images[i].height);
 		}
 	};
-	
+
+	/**
+	 * Queries the icon provider for an image-only search and returns the
+	 * results via the given callback. Used by the "Search Images" omnibox
+	 * option. Pagination is via the 0-based page (p=page); the provider
+	 * uses a fixed page size and ignores the requested count, so "more
+	 * results" is signalled by a non-empty page (paging stops when a page
+	 * comes back empty) rather than by a full page (== count).
+	 */
+	Sidebar.prototype.searchIcons = function(searchTerms, count, page, success)
+	{
+		var results = [];
+
+		mxUtils.get(ICONSEARCH_PATH + '?q=' + encodeURIComponent(searchTerms) +
+			'&p=' + page + '&c=' + count, mxUtils.bind(this, function(req)
+		{
+			try
+			{
+				// Ignores response if nothing or error returned
+				if (req.getStatus() >= 200 && req.getStatus() <= 299 &&
+					req.getText() != null && req.getText().length > 0)
+				{
+					var res = JSON.parse(req.getText());
+
+					if (res == null || res.images == null)
+					{
+						success(results, page * count, false, searchTerms);
+						this.editorUi.handleError(res);
+					}
+					else
+					{
+						this.extractIconsFromResponse(res, results);
+						success(results, page * count + results.length,
+							results.length > 0, searchTerms);
+					}
+				}
+				else
+				{
+					success(results, page * count, false, searchTerms);
+				}
+			}
+			catch (e)
+			{
+				success(results, page * count, false, searchTerms);
+				this.editorUi.handleError(e);
+			}
+		}), mxUtils.bind(this, function()
+		{
+			success(results, page * count, false, searchTerms);
+		}));
+	};
+
+	/**
+	 * Image search is available when an icon provider is configured and the
+	 * editor is online (mirrors the icon results appended to shape search).
+	 */
+	Sidebar.prototype.isImageSearchSupported = function()
+	{
+		return ICONSEARCH_PATH != null && !this.editorUi.isOffline();
+	};
+
 	/**
 	 * Returns true if the search index was loaded.
 	 */
@@ -1906,11 +1966,27 @@
 	 */
 	var sidebarSearchEntries = Sidebar.prototype.searchEntries;
 	
-	Sidebar.prototype.searchEntries = function(searchTerms, count, page, success, error, searchClosedLibraries)
+	Sidebar.prototype.searchEntries = function(searchTerms, count, page, success, error, searchClosedLibraries, imagesOnly)
 	{
 		var succ = success;
 		this.updateSearchIndex();
-		
+
+		// Image-only search bypasses the local shape index and queries the
+		// icon provider directly (the "Search Images" omnibox option).
+		if (imagesOnly)
+		{
+			if (this.isImageSearchSupported())
+			{
+				this.searchIcons(searchTerms, count, page, success);
+			}
+			else
+			{
+				success([], 0, false, searchTerms);
+			}
+
+			return;
+		}
+
 		if (ICONSEARCH_PATH != null && searchClosedLibraries)
 		{
 			success = mxUtils.bind(this, function(results, len, more, terms)

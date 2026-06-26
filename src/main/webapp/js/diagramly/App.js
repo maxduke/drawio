@@ -3869,19 +3869,34 @@ App.prototype.executeCreateObject = function(value, done)
 		{
 			if (EditorUi.isMermaidSupported())
 			{
-				this.parseMermaidDiagram(data, null, mxUtils.bind(this, function(xml)
-				{
-					createDiagram(mxMermaidToDrawio.wrapGroup(xml, data, null));
-				}), mxUtils.bind(this, function(e)
+				var onMermaidError = mxUtils.bind(this, function(e)
 				{
 					this.handleError(e);
-				}));
+				});
+
+				if (value.image)
+				{
+					// image:true creates the diagram as a static SVG image cell
+					// (carrying the mermaid source for re-editing), matching the
+					// legacy image insert. Uses the previous mermaid config.
+					this.parseMermaidImage(data, mxUtils.bind(this, function(xml)
+					{
+						createDiagram(xml);
+					}), onMermaidError);
+				}
+				else
+				{
+					this.parseMermaidDiagram(data, null, mxUtils.bind(this, function(xml)
+					{
+						createDiagram(mxMermaidToDrawio.wrapGroup(xml, data, null));
+					}), onMermaidError);
+				}
 			}
 			else
 			{
 				throw new Error(mxResources.get('serviceUnavailableOrBlocked'));
 			}
-		} 
+		}
 		else if (value.type == 'generate' && this.spinner.spin(
 			document.body, mxResources.get('generate') +
 			' \''+ data + '\''))
@@ -8005,6 +8020,10 @@ App.prototype.getMainUser = function()
 	{
 		user = this.oneDrive.getUser();
 	}
+	else if (this.m365 != null && this.m365.getUser() != null)
+	{
+		user = this.m365.getUser();
+	}
 	else if (this.dropbox != null && this.dropbox.getUser() != null)
 	{
 		user = this.dropbox.getUser();
@@ -8397,14 +8416,14 @@ App.prototype.toggleUserPanel = function()
 			{
 				var file = this.getCurrentFile();
 
-				if (file != null && file.constructor == OneDriveFile)
+				if (file != null && file.constructor == OneDriveFile && !file.isSP)
 				{
 					var doLogout = mxUtils.bind(this, function()
 					{
 						this.oneDrive.logout();
 						window.location.hash = '';
 					});
-					
+
 					if (!file.isModified())
 					{
 						doLogout();
@@ -8420,6 +8439,37 @@ App.prototype.toggleUserPanel = function()
 					this.oneDrive.logout();
 				}
 			}), mxResources.get('oneDrive'));
+		}
+
+		if (this.m365 != null)
+		{
+			addUser(this.m365.getUser(), IMAGE_PATH + '/onedrive-logo.svg', this.m365.noLogout? null : mxUtils.bind(this, function()
+			{
+				var file = this.getCurrentFile();
+
+				if (file != null && file.constructor == OneDriveFile && file.isSP)
+				{
+					var doLogout = mxUtils.bind(this, function()
+					{
+						this.m365.logout();
+						window.location.hash = '';
+					});
+
+					if (!file.isModified())
+					{
+						doLogout();
+					}
+					else
+					{
+						this.confirm(mxResources.get('allChangesLost'), null, doLogout,
+							mxResources.get('cancel'), mxResources.get('discardChanges'));
+					}
+				}
+				else
+				{
+					this.m365.logout();
+				}
+			}), mxResources.get('m365'));
 		}
 
 		if (this.gitHub != null)
@@ -8559,6 +8609,10 @@ App.prototype.getCurrentUser = function()
 	else if (this.oneDrive != null && this.oneDrive.getUser() != null)
 	{
 		user = this.oneDrive.getUser();
+	}
+	else if (this.m365 != null && this.m365.getUser() != null)
+	{
+		user = this.m365.getUser();
 	}
 	else if (this.dropbox != null && this.dropbox.getUser() != null)
 	{

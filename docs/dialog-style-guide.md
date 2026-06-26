@@ -50,6 +50,24 @@ section.className = 'geDialogSection';
 div.appendChild(section);
 ```
 
+**Row spacing is uniform and CSS-driven.** Every row inside a section
+(`geDialogFormRow`, `geDialogCheckRow`, `geDialogInlineFields`) is spaced a
+uniform `6px` from the previous one; the first visible row sits flush against the
+section's 10px top padding. This is handled centrally in `grapheditor.css` — do
+**not** add per-row `margin-top` (it only breaks the uniform rhythm). Because the
+gap is between rows regardless of type, a section can freely mix form rows, check
+rows and inline fields and they stay evenly spaced.
+
+For the same reason, always wrap controls in a proper row class (or use
+`addCheckbox(..., useCheckRow=true)`): row classes carry `min-height: 28px`, so
+mixing a bare `addCheckbox` (no `useCheckRow`, which appends a raw
+`<input><label><br>`) with row-based controls in one section yields inconsistent
+row heights. A bare checkbox gets the same 6px fallback gap, but prefer
+`useCheckRow=true` everywhere. If a first row can be hidden conditionally, remove
+it from the DOM (e.g. `cb.checkRow.parentNode.removeChild(cb.checkRow)`) rather
+than `display:none` — otherwise the now-visually-first row still loses its
+`:first-child` top reset.
+
 ## Collapsible "Advanced" Section (`addAdvancedSection`)
 
 For options that aren't needed in the common case (e.g. Edit / Layers / Tags

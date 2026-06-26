@@ -1716,6 +1716,13 @@ Graph.getSvgFromDataUri = function(uri)
 };
 
 /**
+ * Name of the CSS custom property that carries the exported SVG background
+ * color so a light-dark() value is only applied where it is supported.
+ * See addAdaptiveColors.
+ */
+Graph.svgBackgroundVar = '--ge-adaptive-bg';
+
+/**
  * Helper function for creating an SVG node.
  */
 Graph.createSvgNode = function(x, y, w, h, lightDarkColor)
@@ -1724,13 +1731,13 @@ Graph.createSvgNode = function(x, y, w, h, lightDarkColor)
 	var root = (svgDoc.createElementNS != null) ?
 		svgDoc.createElementNS(mxConstants.NS_SVG, 'svg') :
 		svgDoc.createElement('svg');
-	
+
 	if (lightDarkColor != null)
 	{
 		root.setAttribute('style', 'background: ' + lightDarkColor.light +
 			'; background-color: ' + lightDarkColor.cssText + ';');
-	}	
-	
+	}
+
 	if (svgDoc.createElementNS == null)
 	{
 		root.setAttribute('xmlns', mxConstants.NS_SVG);
@@ -1749,6 +1756,75 @@ Graph.createSvgNode = function(x, y, w, h, lightDarkColor)
 	svgDoc.appendChild(root);
 
 	return root;
+};
+
+/**
+ * Rewrites adaptive (light-dark with var()) colors in the given exported SVG
+ * root to reference the Graph.svgBackgroundVar custom property, which is
+ * defined only inside an @supports block. A light-dark() value whose dark
+ * side is a var() cannot use the usual fallback: the var() keeps the
+ * declaration valid at parse time (so it overrides the plain fallback), but
+ * it is invalid at computed-value time in browsers without light-dark()
+ * (e.g. Firefox ESR 115), which resets the color to inherited/initial and
+ * paints the background/shapes black. Routing it through the custom property
+ * lets those browsers fall back to the light color instead. Only the default
+ * background color (shapeBackgroundColor) carries a var(), so its serialized
+ * value is the exact string to replace wherever it occurs (root background,
+ * background rect and shape fills).
+ */
+Graph.addAdaptiveColors = function(root, shapeBackgroundColor)
+{
+	var adaptive = mxUtils.getLightDarkColor(shapeBackgroundColor);
+
+	if (adaptive.cssText.indexOf('var(') < 0)
+	{
+		return;
+	}
+
+	var replacement = 'var(' + Graph.svgBackgroundVar + ', ' + adaptive.light + ')';
+	var elts = root.getElementsByTagName('*');
+	var nodes = [root];
+	var modified = false;
+
+	for (var i = 0; i < elts.length; i++)
+	{
+		nodes.push(elts[i]);
+	}
+
+	for (var i = 0; i < nodes.length; i++)
+	{
+		var st = nodes[i].getAttribute('style');
+
+		if (st != null && st.indexOf(adaptive.cssText) >= 0)
+		{
+			nodes[i].setAttribute('style',
+				st.split(adaptive.cssText).join(replacement));
+			modified = true;
+		}
+	}
+
+	// Defines the custom property (gated on light-dark() support and scoped to
+	// a unique id on the root) only when at least one color was rewritten.
+	if (modified)
+	{
+		var svgDoc = root.ownerDocument;
+		var id = root.getAttribute('id');
+
+		if (id == null || id == '')
+		{
+			id = 'ge-svg-' + Editor.guid();
+			root.setAttribute('id', id);
+		}
+
+		var style = (svgDoc.createElementNS != null) ?
+			svgDoc.createElementNS(mxConstants.NS_SVG, 'style') :
+			svgDoc.createElement('style');
+		style.setAttribute('type', 'text/css');
+		style.appendChild(svgDoc.createTextNode(
+			'@supports (color: light-dark(#000, #fff)) { #' + id + ' { ' +
+			Graph.svgBackgroundVar + ': ' + adaptive.cssText + '; } }'));
+		root.insertBefore(style, root.firstChild);
+	}
 };
 
 /**
@@ -3370,6 +3446,192 @@ Graph.isLink = function(text)
 mxUtils.extend(Graph, mxGraph);
 
 /**
+ * Subdivides the given absolute points into a fine polyline that approximates
+ * the curve actually drawn for curved/bezier edges, so the tangent is taken
+ * from the rendered spline instead of the straight control polygon. Mirrors
+ * mxPolyline.paintCurvedLine (quadratic through midpoints) and
+ * paintBezierLine (cubic when the points form an [anchor, cp, cp, anchor, ...]
+ * sequence, otherwise the same quadratic fallback). Returns the points
+ * unchanged when none are curved.
+ */
+Graph.getCurvePoints = function(pts, bezier)
+{
+	var n = pts.length;
+
+	if (n < 3 || pts.indexOf(null) >= 0)
+	{
+		return pts;
+	}
+
+	var steps = 16;
+	var result = [pts[0]];
+
+	var quad = function(p0, pc, p1)
+	{
+		for (var t = 1; t <= steps; t++)
+		{
+			var u = t / steps, iu = 1 - u;
+			result.push(new mxPoint(
+				iu * iu * p0.x + 2 * iu * u * pc.x + u * u * p1.x,
+				iu * iu * p0.y + 2 * iu * u * pc.y + u * u * p1.y));
+		}
+	};
+
+	if (bezier && (n - 1) % 3 == 0)
+	{
+		// Points are cubic control points: [anchor, cp1, cp2, anchor, ...]
+		for (var i = 1; i + 2 < n; i += 3)
+		{
+			var p0 = pts[i - 1], c1 = pts[i], c2 = pts[i + 1], p1 = pts[i + 2];
+
+			for (var t = 1; t <= steps; t++)
+			{
+				var u = t / steps, iu = 1 - u;
+				result.push(new mxPoint(
+					iu * iu * iu * p0.x + 3 * iu * iu * u * c1.x + 3 * iu * u * u * c2.x + u * u * u * p1.x,
+					iu * iu * iu * p0.y + 3 * iu * iu * u * c1.y + 3 * iu * u * u * c2.y + u * u * u * p1.y));
+			}
+		}
+	}
+	else
+	{
+		// Quadratic through the midpoints of consecutive control points
+		var prev = pts[0];
+
+		for (var i = 1; i < n - 2; i++)
+		{
+			var mid = new mxPoint((pts[i].x + pts[i + 1].x) / 2,
+				(pts[i].y + pts[i + 1].y) / 2);
+			quad(prev, pts[i], mid);
+			prev = mid;
+		}
+
+		quad(prev, pts[n - 2], pts[n - 1]);
+	}
+
+	return result;
+};
+
+/**
+ * Returns the angle (in degrees) of the edge segment nearest to the absolute
+ * point (px, py). Uses the rendered label position rather than the stored
+ * geometry.x because dragging an edge label updates geometry.offset, not
+ * geometry.x (see mxGraph.translateCell), so a label moved onto a different
+ * segment still resolves to the segment it actually sits on. For curved/bezier
+ * edges the control polygon is subdivided first so the tangent follows the
+ * drawn spline. Returns null if the edge geometry is not yet available.
+ */
+Graph.getEdgeLabelAngle = function(edgeState, px, py)
+{
+	var pts = (edgeState != null) ? edgeState.absolutePoints : null;
+
+	if (pts == null || pts.length < 2)
+	{
+		return null;
+	}
+
+	var style = edgeState.style;
+
+	if (style != null && (style[mxConstants.STYLE_CURVED] == 1 ||
+		style[mxConstants.STYLE_BEZIER] == 1))
+	{
+		pts = Graph.getCurvePoints(pts, style[mxConstants.STYLE_BEZIER] == 1);
+	}
+
+	var angle = null;
+	var bestDist = null;
+
+	for (var i = 1; i < pts.length; i++)
+	{
+		var p0 = pts[i - 1];
+		var pe = pts[i];
+
+		if (p0 == null || pe == null)
+		{
+			continue;
+		}
+
+		// Squared distance from (px, py) to the clamped projection on segment
+		var dx = pe.x - p0.x;
+		var dy = pe.y - p0.y;
+		var len2 = dx * dx + dy * dy;
+		var t = (len2 == 0) ? 0 : Math.max(0, Math.min(1,
+			((px - p0.x) * dx + (py - p0.y) * dy) / len2));
+		var ddx = px - (p0.x + t * dx);
+		var ddy = py - (p0.y + t * dy);
+		var dist = ddx * ddx + ddy * ddy;
+
+		if (bestDist == null || dist < bestDist)
+		{
+			bestDist = dist;
+			angle = Math.atan2(dy, dx) * 180 / Math.PI;
+		}
+	}
+
+	return angle;
+};
+
+/**
+ * Returns the upright tangent angle (in degrees) for the label of the given
+ * state when the labelAutoRotate style is set, or null otherwise. Handles the
+ * main edge label (state.cell is the edge) and child label cells (parent is
+ * the edge). Shared by the label renderer (mxText.getTextRotation) and the
+ * selection handles so the dashed border and the text rotate together.
+ */
+Graph.getLabelAutoRotation = function(state)
+{
+	if (state == null || mxUtils.getValue(state.style, 'labelAutoRotate', '0') != '1')
+	{
+		return null;
+	}
+
+	var model = state.view.graph.model;
+	var edgeState = null;
+	var px, py;
+
+	if (model.isEdge(state.cell))
+	{
+		edgeState = state;
+		px = state.absoluteOffset.x;
+		py = state.absoluteOffset.y;
+	}
+	else if (model.isEdge(model.getParent(state.cell)))
+	{
+		edgeState = state.view.getState(model.getParent(state.cell));
+		px = state.getCenterX();
+		py = state.getCenterY();
+	}
+
+	var angle = (edgeState != null) ? Graph.getEdgeLabelAngle(edgeState, px, py) : null;
+
+	if (angle != null)
+	{
+		angle = mxUtils.mod(angle, 360);
+
+		// Keeps the label upright instead of rendering it upside-down
+		if (angle > 90 && angle < 270)
+		{
+			angle -= 180;
+		}
+	}
+
+	return angle;
+};
+
+/**
+ * Rotates labels tangentially to their edge when the labelAutoRotate style is
+ * set. Runs on every view validation, so the angle tracks the connector
+ * automatically when it is moved or rerouted. See jgraph/drawio#5365.
+ */
+var mxTextGetTextRotation = mxText.prototype.getTextRotation;
+mxText.prototype.getTextRotation = function()
+{
+	var angle = (this.state != null) ? Graph.getLabelAutoRotation(this.state) : null;
+
+	return (angle != null) ? angle : mxTextGetTextRotation.apply(this, arguments);
+};
+
+/**
  * Allows all values in fit.
  */
 Graph.prototype.minFitScale = null;
@@ -4698,7 +4960,7 @@ Graph.prototype.destroy = function()
 	/**
 	 * Copies the style of the given cells to the given vertex and edge style.
 	 */
-	Graph.prototype.copyCellStyles = function(cells, keys, values, vertexStyle, edgeStyle, vertexStyleIgnored, edgeStyleIgnored)
+	Graph.prototype.copyCellStyles = function(cells, keys, values, vertexStyle, edgeStyle, vertexStyleIgnored, edgeStyleIgnored, edgeLabel)
 	{
 		var vertex = false;
 		var edge = false;
@@ -4734,7 +4996,9 @@ Graph.prototype.destroy = function()
 			{
 				if (mxUtils.indexOf(Graph.cellStyles, keys[i]) >= 0 || keys[i] == 'shape')
 				{
-					if (keys[i] != 'shape' && (vertex || common))
+					// Shared text styles also update the vertex default unless it was
+					// pinned via setDefaultStyle; edge labels never touch it
+					if (keys[i] != 'shape' && (vertex || (common && !vertexStyleIgnored)) && !edgeLabel)
 					{
 						if (values[i] == null)
 						{
@@ -4745,8 +5009,10 @@ Graph.prototype.destroy = function()
 							vertexStyle[keys[i]] = values[i];
 						}
 					}
-					
-					if (edge || common)
+
+					// Shared text styles also update the edge default unless it was
+					// pinned via setDefaultStyle
+					if (edge || (common && !edgeStyleIgnored))
 					{
 						if (values[i] == null)
 						{
@@ -4802,8 +5068,13 @@ Graph.prototype.destroy = function()
 					pairs = cell.style.split(';');
 					isText = isText || mxUtils.indexOf(pairs, 'text') >= 0;
 				}
-				
-				if (isText)
+
+				// Edge labels (vertex children of edges) only receive text styles and
+				// take them from the edge style so they match the edge's own label
+				var isEdgeLabel = this.model.isVertex(cell) &&
+					this.model.isEdge(this.model.getParent(cell));
+
+				if (isText || isEdgeLabel)
 				{
 					// Applies only basic text styles
 					appliedStyles = Graph.textStyles;
@@ -4857,7 +5128,7 @@ Graph.prototype.destroy = function()
 				
 				// Applies the current style to the cell
 				var edge = this.model.isEdge(cell);
-				var current = (edge) ? edgeStyle : vertexStyle;
+				var current = (edge || isEdgeLabel) ? edgeStyle : vertexStyle;
 
 				for (var j = 0; j < appliedStyles.length; j++)
 				{
@@ -7166,7 +7437,14 @@ Graph.prototype.selectCellForEvent = function(cell, evt)
 	// The drill-down step (selected is a strict ancestor of cell) keeps cell
 	// as-is; the escalate step (cell is at-or-above selected with a
 	// transparentBounds parent above it) walks one level out.
-	if (cell != null && !this.isToggleEvent(evt) && this.getSelectionCount() == 1)
+	//
+	// Edges are excluded from the escalate step: a double-click's second click
+	// would otherwise escalate the already-selected edge to its transparentBounds
+	// parent, destroying the edge handler before the native dblclick fires and
+	// dropping the edge-label insert. Edges in regular groups never escalate
+	// either, so this keeps double-click-to-add-label consistent across groups.
+	if (cell != null && !this.model.isEdge(cell) &&
+		!this.isToggleEvent(evt) && this.getSelectionCount() == 1)
 	{
 		var selected = this.getSelectionCell();
 
@@ -15424,10 +15702,12 @@ if (typeof mxVertexHandler !== 'undefined')
 		 * @returns {Boolean}
 		 */
 		/**
-		 * Includes transparentBounds cells (which are not resizable in the
-		 * standard sense, so isCellResizable returns false to suppress sizers)
-		 * in the rotatable set so that the turn / rotateShapeOnly action can
-		 * advance the direction style on a transparentBounds swimlane.
+		 * Includes cells that isCellResizable rejects (so they show no sizers)
+		 * but the turn action can still rotate by advancing the direction style:
+		 * transparentBounds swimlanes, and swimlane-shaped table cells (the lanes
+		 * of a cross-functional flowchart, which isCellResizable filters out as
+		 * table cells). Plain table rows/cells stay excluded as they are not
+		 * swimlane shapes.
 		 */
 		var graphGetResizableCells = Graph.prototype.getResizableCells;
 		Graph.prototype.getResizableCells = function(cells)
@@ -15438,7 +15718,9 @@ if (typeof mxVertexHandler !== 'undefined')
 			{
 				for (var i = 0; i < cells.length; i++)
 				{
-					if (this.isTransparentBounds(cells[i]) &&
+					if ((this.isTransparentBounds(cells[i]) ||
+						this.getCurrentCellStyle(cells[i])[mxConstants.STYLE_SHAPE] ==
+						mxConstants.SHAPE_SWIMLANE) &&
 						mxUtils.indexOf(result, cells[i]) < 0)
 					{
 						result.push(cells[i]);
@@ -16221,6 +16503,11 @@ if (typeof mxVertexHandler !== 'undefined')
 					this.view.currentRoot : this.model.root;
 				imgExport.drawState(this.getView().getState(viewRoot), svgCanvas);
 				this.addForeignObjectWarning(svgCanvas, root);
+
+				// Routes light-dark() colors that contain a var() through a
+				// custom property so they degrade to the light color in browsers
+				// without light-dark() support (e.g. Firefox ESR 115).
+				Graph.addAdaptiveColors(root, this.shapeBackgroundColor);
 
 				// Disables links
 				if (disableLinks)
@@ -18760,7 +19047,9 @@ if (typeof mxVertexHandler !== 'undefined')
 				!this.graph.isTableCell(this.state.cell) &&
 				!this.graph.isTableRow(this.state.cell) &&
 				!this.graph.isTable(this.state.cell) &&
-				!this.graph.isTransparentBounds(this.state.cell);
+				!this.graph.isTransparentBounds(this.state.cell) &&
+				// Manual rotation is overridden by labelAutoRotate
+				mxUtils.getValue(this.state.style, 'labelAutoRotate', '0') != '1';
 		};
 
 		/**
@@ -19469,11 +19758,59 @@ if (typeof mxVertexHandler !== 'undefined')
 
 				parent = graph.model.getParent(parent);
 			}
+
+			// For cells with children (groups, containers, tables) the base
+			// handler disables live preview, which also leaves every resize
+			// handle visible during the gesture. Hide the inactive handles
+			// here so only the dragged handle stays, matching leaf shapes
+			// (mxVertexHandler.start does this in its live preview block).
+			if (!this.livePreviewActive && this.ghostPreview == null && this.index != null &&
+				this.index != mxEvent.LABEL_HANDLE && this.sizers != null)
+			{
+				for (var i = 0; i < this.sizers.length; i++)
+				{
+					if (this.sizers[i] != null && i != this.index)
+					{
+						this.sizers[i].node.style.display = 'none';
+					}
+				}
+
+				if (this.rotationShape != null && this.index != mxEvent.ROTATION_HANDLE)
+				{
+					this.rotationShape.node.style.visibility = 'hidden';
+				}
+
+				this.resizeHandlesHidden = true;
+			}
 		};
 
 		var vertexHandlerReset = mxVertexHandler.prototype.reset;
 		mxVertexHandler.prototype.reset = function()
 		{
+			// Restores the handles hidden in start for a non-live-preview
+			// resize/rotate (cells with children). The base reset re-runs
+			// redrawHandles afterwards to re-apply the correct visibility.
+			if (this.resizeHandlesHidden)
+			{
+				if (this.sizers != null)
+				{
+					for (var i = 0; i < this.sizers.length; i++)
+					{
+						if (this.sizers[i] != null)
+						{
+							this.sizers[i].node.style.display = '';
+						}
+					}
+				}
+
+				if (this.rotationShape != null)
+				{
+					this.rotationShape.node.style.visibility = '';
+				}
+
+				this.resizeHandlesHidden = null;
+			}
+
 			var graph = this.graph;
 			var parent = (this.state != null) ?
 				graph.model.getParent(this.state.cell) : null;
@@ -20093,6 +20430,29 @@ if (typeof mxVertexHandler !== 'undefined')
 		mxEdgeHandler.prototype.mergeRemoveEnabled = true;
 		mxEdgeHandler.prototype.manageLabelHandle = true;
 		mxEdgeHandler.prototype.outlineConnect = true;
+
+		// Double click on an unconnected straight-edge terminal handle fires an
+		// event so the shape picker can be shown (handled in EditorUi) instead of
+		// removing a point (a no-op for terminals). removePoint is only reached via
+		// the double click handler here because removeEnabled is false.
+		var edgeHandlerRemovePoint = mxEdgeHandler.prototype.removePoint;
+		mxEdgeHandler.prototype.removePoint = function(state, index)
+		{
+			var source = (index == 0);
+
+			if ((source || (this.abspoints != null && index == this.abspoints.length - 1)) &&
+				this.abspoints != null && this.abspoints[index] != null &&
+				this.graph.getModel().getTerminal(state.cell, source) == null)
+			{
+				this.graph.fireEvent(new mxEventObject('doubleClickEdgeTerminal',
+					'cell', state.cell, 'source', source,
+					'point', this.abspoints[index].clone()));
+			}
+			else
+			{
+				edgeHandlerRemovePoint.apply(this, arguments);
+			}
+		};
 		
 		// Disables adding waypoints if shift is pressed
 		mxEdgeHandler.prototype.isAddVirtualBendEvent = function(me)
@@ -20736,6 +21096,16 @@ if (typeof mxVertexHandler !== 'undefined')
 		{
 			vertexHandlerMouseMove.apply(this, arguments);
 
+			// Keeps the visible (active) handle aligned with the live bounds
+			// during a non-live-preview resize/rotate so it tracks the cursor
+			// like the handles on leaf shapes. The base handler only repositions
+			// handles via redrawHandles when live preview is active (childless
+			// cells); cells with children take the static preview path instead.
+			if (this.resizeHandlesHidden && this.index != null && !this.inTolerance)
+			{
+				this.redrawHandles();
+			}
+
 			if (this.graph.graphHandler.first != null)
 			{
 				if (this.rotationShape != null && this.rotationShape.node != null)
@@ -21071,8 +21441,14 @@ if (typeof mxVertexHandler !== 'undefined')
 
 				if (this.rotationShape.rotation !== deg)
 				{
+					// mxShape.redraw resets node visibility to 'visible', which
+					// would undo the hidden state the base redraw set from
+					// isRotationHandleVisible (e.g. labelAutoRotate or table
+					// cells that are also rotated), so preserve it across redraw.
+					var vis = this.rotationShape.node.style.visibility;
 					this.rotationShape.rotation = deg;
 					this.rotationShape.redraw();
+					this.rotationShape.node.style.visibility = vis;
 				}
 			}
 
@@ -21129,6 +21505,25 @@ if (typeof mxVertexHandler !== 'undefined')
 			}
 		};
 		
+		// Rotates the dashed selection border to follow auto-rotated labels.
+		// drawPreview repaints the border on both the normal redraw and the
+		// live-preview drag (where redrawHandles is skipped via redraw(true)),
+		// so setting the rotation here keeps the outline aligned with the
+		// label as it is dragged along the edge. Falls back to the static
+		// rotation style when auto rotation is off so the border snaps back.
+		var vertexHandlerDrawPreview = mxVertexHandler.prototype.drawPreview;
+		mxVertexHandler.prototype.drawPreview = function()
+		{
+			if (this.selectionBorder != null)
+			{
+				var autoRotation = Graph.getLabelAutoRotation(this.state);
+				this.selectionBorder.rotation = (autoRotation != null) ? autoRotation :
+					Number(this.state.style[mxConstants.STYLE_ROTATION] || '0');
+			}
+
+			vertexHandlerDrawPreview.apply(this, arguments);
+		};
+
 		// Destroys special handles
 		var vertexHandlerDestroy = mxVertexHandler.prototype.destroy;
 		mxVertexHandler.prototype.destroy = function()

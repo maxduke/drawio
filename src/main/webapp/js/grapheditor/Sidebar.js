@@ -234,6 +234,16 @@ Sidebar.prototype.searchClosedLibraries = true;
  */
 Sidebar.prototype.closedLibraryOpacity = null;
 
+/**
+ * Whether an image-only search (eg. via an external icon provider) is
+ * available. Default is false; subclassers that wire up an image search
+ * backend override this to surface the "Search Images" omnibox option.
+ */
+Sidebar.prototype.isImageSearchSupported = function()
+{
+	return false;
+};
+
 /*
  * Experimental smaller sidebar entries
  */
@@ -1065,7 +1075,7 @@ Sidebar.prototype.getResourceReverseMap = function()
 /**
  * Adds shape search UI.
  */
-Sidebar.prototype.searchEntries = function(searchTerms, count, page, success, error, searchClosedLibraries)
+Sidebar.prototype.searchEntries = function(searchTerms, count, page, success, error, searchClosedLibraries, imagesOnly)
 {
 	if (this.taglist != null && searchTerms != null)
 	{
@@ -1508,17 +1518,17 @@ Sidebar.prototype.addSearchPalette = function(expand)
 
 		var item = menu.addItem(mxResources.get('searchShapes'), null, mxUtils.bind(this, function()
 		{
-			find();
+			find(null, false);
 		}), parent);
 
 		setEnterAction(item, function()
 		{
-			find();
+			find(null, false);
 		});
 
 		var openLibItem = menu.addItem(mxResources.get('searchShapesInOpenLibraries'), null, mxUtils.bind(this, function()
 		{
-			find(false);
+			find(false, false);
 		}), parent);
 
 		var td = openLibItem.firstChild.nextSibling.nextSibling;
@@ -1526,6 +1536,16 @@ Sidebar.prototype.addSearchPalette = function(expand)
 		span.style.color = 'gray';
 		span.innerHTML = 'Shift+Enter';
 		td.appendChild(span);
+
+		// Separate image-only search (eg. via the icon provider); only
+		// offered when an image search backend is configured.
+		if (this.isImageSearchSupported())
+		{
+			menu.addItem(mxResources.get('searchImages'), null, mxUtils.bind(this, function()
+			{
+				find(null, true);
+			}), parent);
+		}
 
 		menu.addItem(mxResources.get('findInDiagram'), null, mxUtils.bind(this, function()
 		{
@@ -1799,12 +1819,21 @@ Sidebar.prototype.addSearchPalette = function(expand)
 	});
 
 	var lastSearchClosedLibs = null;
+	var lastImagesOnly = null;
 
-	find = mxUtils.bind(this, function(searchClosedLibs)
+	find = mxUtils.bind(this, function(searchClosedLibs, imagesOnly)
 	{
 		if (searchClosedLibs == null)
 		{
 			searchClosedLibs = this.searchClosedLibraries;
+		}
+
+		// Preserves the current mode for paging (eg. the More Results
+		// button) so an image search is not silently turned into a
+		// shape search; explicit callers (the omnibox items) pass a value.
+		if (imagesOnly == null)
+		{
+			imagesOnly = (lastImagesOnly != null) ? lastImagesOnly : false;
 		}
 
 		editorUi.hideCurrentMenu();
@@ -1817,11 +1846,13 @@ Sidebar.prototype.addSearchPalette = function(expand)
 		{
 			if (center.parentNode != null)
 			{
-				if (searchTerm != input.value || lastSearchClosedLibs != searchClosedLibs)
+				if (searchTerm != input.value || lastSearchClosedLibs != searchClosedLibs ||
+					lastImagesOnly != imagesOnly)
 				{
 					clearDiv();
 					searchTerm = input.value;
 					lastSearchClosedLibs = searchClosedLibs;
+					lastImagesOnly = imagesOnly;
 					hash = new Object();
 					complete = false;
 					page = 0;
@@ -1950,7 +1981,7 @@ Sidebar.prototype.addSearchPalette = function(expand)
 						}), mxUtils.bind(this, function()
 						{
 							button.style.cursor = '';
-						}), searchClosedLibs);
+						}), searchClosedLibs, imagesOnly);
 					}
 					catch (e)
 					{
@@ -1974,7 +2005,7 @@ Sidebar.prototype.addSearchPalette = function(expand)
 	this.searchShapes = function(value)
 	{
 		input.value = value;
-		find();
+		find(null, false);
 	};
 	
 	mxEvent.addListener(input, 'keydown', mxUtils.bind(this, function(evt)
@@ -1982,7 +2013,7 @@ Sidebar.prototype.addSearchPalette = function(expand)
 		if (evt.keyCode == 13 /* Enter */ && evt.shiftKey)
 		{
 			consumeNextShiftUp = true;
-			find(false);
+			find(false, false);
 			mxEvent.consume(evt);
 		}
 		else if (evt.keyCode == 13 /* Enter */ && (evt.metaKey || evt.ctrlKey) &&
@@ -3147,7 +3178,7 @@ Sidebar.prototype.createSection = function(title)
  */
 Sidebar.prototype.createItem = function(cells, title, showLabel, showTitle, width, height,
 	allowCellsInserted, showTooltip, clickFn, thumbWidth, thumbHeight, icon, startEditing,
-	sourceCell, useElt)
+	sourceCell, useElt, connectEdge)
 {
 	showTooltip = (showTooltip != null) ? showTooltip : true;
 	thumbWidth = (thumbWidth != null) ? thumbWidth : this.thumbWidth;
@@ -3228,7 +3259,7 @@ Sidebar.prototype.createItem = function(cells, title, showLabel, showTitle, widt
 		if (cells.length > 1 || cells[0].vertex)
 		{
 			var ds = this.createDragSource(elt, this.createDropHandler(cells, true, allowCellsInserted,
-				bounds, startEditing, sourceCell), this.createDragPreview(width, height),
+				bounds, startEditing, sourceCell, connectEdge), this.createDragPreview(width, height),
 				cells, bounds, startEditing);
 			this.addClickHandler(elt, ds, cells, clickFn, startEditing);
 		
@@ -3241,7 +3272,7 @@ Sidebar.prototype.createItem = function(cells, title, showLabel, showTitle, widt
 		else if (cells[0] != null && cells[0].edge)
 		{
 			var ds = this.createDragSource(elt, this.createDropHandler(cells, false, allowCellsInserted,
-				bounds, startEditing, sourceCell), this.createDragPreview(width, height),
+				bounds, startEditing, sourceCell, connectEdge), this.createDragPreview(width, height),
 				cells, bounds, startEditing);
 			this.addClickHandler(elt, ds, cells, clickFn);
 		}
@@ -3303,7 +3334,7 @@ Sidebar.prototype.prepareCellsForInsert = function(cells)
 /**
  * Creates a drop handler for inserting the given cells.
  */
-Sidebar.prototype.createDropHandler = function(cells, allowSplit, allowCellsInserted, bounds, startEditing, sourceCell)
+Sidebar.prototype.createDropHandler = function(cells, allowSplit, allowCellsInserted, bounds, startEditing, sourceCell, connectEdge)
 {
 	allowCellsInserted = (allowCellsInserted != null) ? allowCellsInserted : true;
 	this.prepareCellsForInsert.call(this, cells);
@@ -3337,7 +3368,15 @@ Sidebar.prototype.createDropHandler = function(cells, allowSplit, allowCellsInse
 				{
 					target = null;
 				}
-				
+
+				// When reconnecting an unconnected edge terminal to the dropped shape,
+				// ignores the drop target so the shape is inserted at the drop location
+				// and the terminal is connected (never splitting or nesting into it)
+				if (connectEdge != null)
+				{
+					target = null;
+				}
+
 				if (!graph.isCellLocked(target || graph.getDefaultParent()))
 				{
 					graph.model.beginUpdate();
@@ -3363,7 +3402,7 @@ Sidebar.prototype.createDropHandler = function(cells, allowSplit, allowCellsInse
 						else if (cells.length > 0)
 						{
 							select = graph.importCells(cells, x, y, target);
-							
+
 							if (graph.model.isVertex(sourceCell) && select.length == 1 &&
 								graph.model.isVertex(select[0]))
 							{
@@ -3375,6 +3414,21 @@ Sidebar.prototype.createDropHandler = function(cells, allowSplit, allowCellsInse
 								if (graph.connectionHandler.insertBeforeSource)
 								{
 									graph.insertEdgeBeforeCell(edge, sourceCell);
+								}
+							}
+							// Reconnects an existing unconnected edge terminal to the dropped shape
+							else if (connectEdge != null && select.length == 1 &&
+								graph.model.isVertex(select[0]) &&
+								graph.model.contains(connectEdge.cell))
+							{
+								graph.model.setTerminal(connectEdge.cell, select[0], connectEdge.source);
+								var ceGeo = graph.getCellGeometry(connectEdge.cell);
+
+								if (ceGeo != null && ceGeo.getTerminalPoint(connectEdge.source) != null)
+								{
+									ceGeo = ceGeo.clone();
+									ceGeo.setTerminalPoint(null, connectEdge.source);
+									graph.model.setGeometry(connectEdge.cell, ceGeo);
 								}
 							}
 						}
@@ -4848,12 +4902,12 @@ Sidebar.prototype.createVertexTemplateFromData = function(data, width, height, t
  */
 Sidebar.prototype.createVertexTemplateFromCells = function(cells, width, height, title, showLabel,
 	showTitle, allowCellsInserted, showTooltip, clickFn, thumbWidth, thumbHeight, icon, startEditing,
-	sourceCell)
+	sourceCell, connectEdge)
 {
 	// Use this line to convert calls to this function with lots of boilerplate code for creating cells
 	//console.trace('xml', Graph.compress(mxUtils.getXml(this.graph.encodeCells(cells))), cells);
 	return this.createItem(cells, title, showLabel, showTitle, width, height, allowCellsInserted,
-		showTooltip, clickFn, thumbWidth, thumbHeight, icon, startEditing, sourceCell);
+		showTooltip, clickFn, thumbWidth, thumbHeight, icon, startEditing, sourceCell, undefined, connectEdge);
 };
 
 /**

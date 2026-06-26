@@ -579,6 +579,65 @@ Actions.prototype.init = function()
 	{
 		graph.orderCells(true, null, true);
 	}, null, null, Editor.ctrlKey + '+Alt+Shift+B');
+	// Alignment and distribution as named actions so they are reachable via
+	// the omnisearch (type "/", then eg. "align top") without a keyboard
+	// shortcut. Mirrors the Arrange panel / Edit > Align and Distribute menus.
+	this.addAction('alignCellsLeft', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.alignCells(mxConstants.ALIGN_LEFT);
+		}
+	});
+	this.addAction('alignCellsCenter', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.alignCells(mxConstants.ALIGN_CENTER);
+		}
+	});
+	this.addAction('alignCellsRight', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.alignCells(mxConstants.ALIGN_RIGHT);
+		}
+	});
+	this.addAction('alignCellsTop', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.alignCells(mxConstants.ALIGN_TOP);
+		}
+	});
+	this.addAction('alignCellsMiddle', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.alignCells(mxConstants.ALIGN_MIDDLE);
+		}
+	});
+	this.addAction('alignCellsBottom', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.alignCells(mxConstants.ALIGN_BOTTOM);
+		}
+	});
+	this.addAction('distributeHorizontal', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.distributeCells(true);
+		}
+	});
+	this.addAction('distributeVertical', function()
+	{
+		if (graph.isEnabled())
+		{
+			graph.distributeCells(false);
+		}
+	});
 	this.addAction('group', function()
 	{
 		if (graph.isEnabled())

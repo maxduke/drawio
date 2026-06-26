@@ -944,6 +944,10 @@ mxStencilRegistry.allowEval = false;
 	{
 		var paths = argsObj.args;
 		var layoutName = argsObj.layout;
+		// Set by the --mermaid-image command-line flag (parsed in the desktop
+		// main process, like layout): opens .mmd/.mermaid files as a static
+		// image instead of an editable diagram.
+		var mermaidImage = argsObj.mermaidImage;
 
 		// If a file is passed, and it is not an argument (has a leading -)
 		if (paths !== undefined && paths[0] != null && paths[0].indexOf('-') != 0 && this.spinner.spin(document.body, mxResources.get('loading')))
@@ -997,7 +1001,7 @@ mxStencilRegistry.allowEval = false;
 			});
 			
 			// Tries to open the file
-			this.readGraphFile(success, error, path);
+			this.readGraphFile(success, error, path, null, mermaidImage);
 		}
 		// If no file is passed, but there is the "create-if-not-exists" flag
 		else if (argsObj.create != null)
@@ -1395,7 +1399,7 @@ mxStencilRegistry.allowEval = false;
 		origOpenFiles.apply(this, arguments);
 	};
 	
-	App.prototype.readGraphFile = function(fn, fnErr, path, noDraftCheck)
+	App.prototype.readGraphFile = function(fn, fnErr, path, noDraftCheck, mermaidImage)
 	{
 		var index = path.lastIndexOf('.png');
 		var isPng = index > -1 && index == path.length - 4;
@@ -1497,7 +1501,9 @@ mxStencilRegistry.allowEval = false;
 			{
 				// Mermaid files are converted to a diagram and opened as a new,
 				// unsaved .drawio file (the Mermaid source is preserved on the
-				// resulting group for re-editing). Mirrors the VSDX/PDF import path.
+				// resulting group/image for re-editing). Mirrors the VSDX/PDF
+				// import path. The --mermaid-image command-line flag opens the
+				// file as a static SVG image instead of an editable diagram.
 				var name = fileEntry.name;
 				var dot = name.lastIndexOf('.');
 				name = (dot >= 0 ? name.substring(0, dot) : name) + '.drawio';
@@ -1507,13 +1513,9 @@ mxStencilRegistry.allowEval = false;
 				// it is ready — wait for it before parsing.
 				this.whenScriptReady(EditorUi.isMermaidSupported, mxUtils.bind(this, function()
 				{
-					this.parseMermaidDiagram(data, null, mxUtils.bind(this, function(mermaidXml)
+					var onMermaid = mxUtils.bind(this, function(diagramXml)
 					{
-						// normalize:true shifts the wrapped content so the group's
-						// padded bounds start at (0,0) — i.e. the diagram is inset
-						// from the page origin by groupPadding instead of sitting
-						// flush at (0,0) with the padding spilling into negative space.
-						fn(null, mxMermaidToDrawio.wrapGroup(mermaidXml, data, null, {normalize: true}), null, name, false);
+						fn(null, diagramXml, null, name, false);
 
 						// Mermaid files carry no stored view, so the default scroll
 						// can land at an arbitrary edge (e.g. the bottom of a tall
@@ -1523,11 +1525,29 @@ mxStencilRegistry.allowEval = false;
 						window.setTimeout(function() { ui.fitInitialView(); }, 0);
 
 						checkDrafts();
-					}), mxUtils.bind(this, function(e)
+					});
+
+					var onMermaidError = mxUtils.bind(this, function(e)
 					{
 						fnErr(e);
 						checkDrafts();
-					}));
+					});
+
+					if (mermaidImage)
+					{
+						this.parseMermaidImage(data, onMermaid, onMermaidError);
+					}
+					else
+					{
+						this.parseMermaidDiagram(data, null, mxUtils.bind(this, function(mermaidXml)
+						{
+							// normalize:true shifts the wrapped content so the group's
+							// padded bounds start at (0,0) — i.e. the diagram is inset
+							// from the page origin by groupPadding instead of sitting
+							// flush at (0,0) with the padding spilling into negative space.
+							onMermaid(mxMermaidToDrawio.wrapGroup(mermaidXml, data, null, {normalize: true}));
+						}), onMermaidError);
+					}
 				}), mxUtils.bind(this, function()
 				{
 					fnErr(new Error(mxResources.get('serviceUnavailableOrBlocked')));

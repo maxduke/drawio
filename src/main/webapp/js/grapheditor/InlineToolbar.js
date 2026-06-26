@@ -929,7 +929,101 @@ InlineToolbar.prototype.buildIconGrid = function(body, items, activeIndex, callb
 };
 
 /**
- * Shows the line style popover: dash pattern, stroke width, stroke color.
+ * Creates a clickable color swatch that opens the color picker for the
+ * given style key and applies the chosen color to the given cells.
+ * Picking a color (or closing the picker) hides the toolbar, matching
+ * the behaviour of the other color swatches.
+ */
+InlineToolbar.prototype.createColorSwatch = function(title, currentColor, styleKey, defaultColorValue)
+{
+	var graph = this.graph;
+	var swatch = document.createElement('div');
+	swatch.style.width = '28px';
+	swatch.style.height = '28px';
+	swatch.style.borderRadius = '6px';
+	swatch.style.border = '1px solid light-dark(#d0d0d0, #505050)';
+	swatch.style.cursor = 'pointer';
+	swatch.style.boxSizing = 'border-box';
+	swatch.style.flexShrink = '0';
+	swatch.setAttribute('title', title);
+
+	var updateSwatch = function(color)
+	{
+		if (color == null || color == 'none')
+		{
+			swatch.style.background = 'linear-gradient(135deg, white 45%, red 45%, red 55%, white 55%)';
+			swatch.style.backgroundColor = '';
+		}
+		else
+		{
+			var cssColor = mxUtils.getLightDarkColor(color);
+
+			if (mxUtils.isLightDarkColor(color) &&
+				cssColor.light != cssColor.dark)
+			{
+				swatch.style.background = 'linear-gradient(to right bottom, ' +
+					cssColor.cssText + ' 50%, ' + mxUtils.invertLightDarkColor(cssColor).
+					cssText + ' 50.3%)';
+			}
+			else
+			{
+				swatch.style.background = '';
+				swatch.style.backgroundColor = cssColor.cssText;
+			}
+		}
+	};
+
+	updateSwatch(currentColor);
+
+	mxEvent.addListener(swatch, 'click', mxUtils.bind(this, function(e)
+	{
+		// Reads the current selection's color for this style key. The color
+		// picker is a non-modal window that stays open across selection
+		// changes; passing this lets ColorWindow re-sync its swatch to the
+		// new selection (it refreshes from getColorFn on selectionChange/
+		// styleChanged), matching the Format panel and font color menus.
+		var getColorFn = function()
+		{
+			var cell = graph.getSelectionCell();
+			var cellStyle = (cell != null) ? graph.getCellStyle(cell, false) : null;
+
+			return (cellStyle != null) ? (cellStyle[styleKey] || mxConstants.NONE) :
+				mxConstants.NONE;
+		};
+
+		this.editorUi.pickColor(getColorFn(),
+			mxUtils.bind(this, function(color)
+			{
+				// Apply to the live selection read at apply time, not the cells
+				// captured when the swatch was built. Same reason as above:
+				// the selection may have changed while the picker was open.
+				graph.stopEditing(false);
+				graph.setCellStyles(styleKey, color, this.editorUi.getSelectionState().cells);
+				this.hide();
+			}), 'default', defaultColorValue, null, title, getColorFn);
+
+		var cw = this.editorUi.colorWindow;
+
+		if (cw != null)
+		{
+			var hideListener = mxUtils.bind(this, function()
+			{
+				cw.window.removeListener(hideListener);
+				this.hide();
+			});
+
+			cw.window.addListener(mxEvent.HIDE, hideListener);
+		}
+
+		mxEvent.consume(e);
+	}));
+
+	return swatch;
+};
+
+/**
+ * Shows the line style popover: dash pattern, stroke width, stroke color
+ * and, for edge shapes that support them, fill and gradient color.
  */
 InlineToolbar.prototype.showLineStyleMenu = function(evt)
 {
@@ -1283,75 +1377,60 @@ InlineToolbar.prototype.showLineStyleMenu = function(evt)
 	widthContainer.appendChild(stepperDiv);
 	row2.appendChild(widthContainer);
 
-	// Color swatch
+	// Stroke color swatch
 	var strokeColor = mxUtils.getValue(style, mxConstants.STYLE_STROKECOLOR, '#000000');
-	var swatch = document.createElement('div');
-	swatch.style.width = '28px';
-	swatch.style.height = '28px';
-	swatch.style.borderRadius = '6px';
-	swatch.style.border = '1px solid light-dark(#d0d0d0, #505050)';
-	swatch.style.cursor = 'pointer';
-	swatch.style.boxSizing = 'border-box';
-	swatch.style.flexShrink = '0';
-	swatch.setAttribute('title', mxResources.get('strokeColor'));
-
-	function updateSwatch(color)
-	{
-		if (color == null || color == 'none')
-		{
-			swatch.style.background = 'linear-gradient(135deg, white 45%, red 45%, red 55%, white 55%)';
-			swatch.style.backgroundColor = '';
-		}
-		else
-		{
-			var cssColor = mxUtils.getLightDarkColor(color);
-
-			if (mxUtils.isLightDarkColor(color) &&
-				cssColor.light != cssColor.dark)
-			{
-				swatch.style.background = 'linear-gradient(to right bottom, ' +
-					cssColor.cssText + ' 50%, ' + mxUtils.invertLightDarkColor(cssColor).
-					cssText + ' 50.3%)';
-			}
-			else
-			{
-				swatch.style.background = '';
-				swatch.style.backgroundColor = cssColor.cssText;
-			}
-		}
-	};
-
-	updateSwatch(strokeColor);
-
-	mxEvent.addListener(swatch, 'click', mxUtils.bind(this, function(e)
-	{
-		this.editorUi.pickColor(strokeColor != 'none' ? strokeColor : null,
-			mxUtils.bind(this, function(color)
-			{
-				graph.stopEditing(false);
-				graph.setCellStyles(mxConstants.STYLE_STROKECOLOR, color, cells);
-				this.hide();
-			}), 'default', graph.shapeForegroundColor, null,
-			mxResources.get('strokeColor'));
-
-		var cw = this.editorUi.colorWindow;
-
-		if (cw != null)
-		{
-			var hideListener = mxUtils.bind(this, function()
-			{
-				cw.window.removeListener(hideListener);
-				this.hide();
-			});
-
-			cw.window.addListener(mxEvent.HIDE, hideListener);
-		}
-
-		mxEvent.consume(e);
-	}));
-
-	row2.appendChild(swatch);
+	row2.appendChild(this.createColorSwatch(mxResources.get('strokeColor'),
+		strokeColor, mxConstants.STYLE_STROKECOLOR, graph.shapeForegroundColor));
 	body.appendChild(row2);
+
+	// Row 3: Fill and gradient color, shown only for edge shapes that
+	// support them (filled edge, flex arrow, arrow, pipe, wire, …).
+	var state = this.currentState;
+
+	if (state != null && graph.isFillState(state))
+	{
+		var fillColor = mxUtils.getValue(style, mxConstants.STYLE_FILLCOLOR, null);
+		var row3 = document.createElement('div');
+		row3.style.display = 'flex';
+		row3.style.alignItems = 'center';
+		row3.style.gap = '6px';
+		row3.style.marginTop = '8px';
+
+		var addColorGroup = mxUtils.bind(this, function(labelText, title, color,
+			styleKey, defaultColorValue, extraGap)
+		{
+			var label = document.createElement('span');
+			label.style.fontSize = '11px';
+			label.style.color = 'light-dark(#333, #ccc)';
+
+			if (extraGap)
+			{
+				label.style.marginLeft = '8px';
+			}
+
+			mxUtils.write(label, labelText);
+			row3.appendChild(label);
+			row3.appendChild(this.createColorSwatch(title, color, styleKey,
+				defaultColorValue));
+		});
+
+		addColorGroup(mxResources.get('fill'), mxResources.get('fillColor'),
+			fillColor, mxConstants.STYLE_FILLCOLOR, graph.shapeBackgroundColor, false);
+
+		// Gradient needs a fill color and a shape that supports gradients
+		// (excludes wire/pipe).
+		if (graph.isGradientState(state) && fillColor != null &&
+			fillColor != mxConstants.NONE)
+		{
+			var gradientColor = mxUtils.getValue(style,
+				mxConstants.STYLE_GRADIENTCOLOR, null);
+			addColorGroup(mxResources.get('gradient'), mxResources.get('gradientColor'),
+				gradientColor, mxConstants.STYLE_GRADIENTCOLOR,
+				graph.shapeForegroundColor, true);
+		}
+
+		body.appendChild(row3);
+	}
 
 	// Position and animate
 	p.position();

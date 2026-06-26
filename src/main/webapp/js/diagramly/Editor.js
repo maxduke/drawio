@@ -2647,6 +2647,11 @@
 				Graph.intersectionSelect = config.intersectionSelect
 			}
 
+			if (config.swimlaneSelectionEnabled != null)
+			{
+				Graph.prototype.swimlaneSelectionEnabled = config.swimlaneSelectionEnabled;
+			}
+
 			if (config.autosaveDelay != null)
 			{
 				DrawioFile.prototype.autosaveDelay = config.autosaveDelay
