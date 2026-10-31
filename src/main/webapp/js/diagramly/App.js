@@ -337,7 +337,7 @@ App.pluginRegistry = {'ex': 'plugins/explore.js',
 	'replay': 'plugins/replay.js', 'anon': 'plugins/anonymize.js',
 	'tr': 'plugins/trello.js',
 	'rnd': 'plugins/random.js',
-	'page': 'plugins/page.js', 'tags': 'plugins/tags.js'};
+	'tags': 'plugins/tags.js'};
 
 App.publicPlugin = [
 	'ex',
@@ -349,7 +349,7 @@ App.publicPlugin = [
 	'trees',
 	'replay',
 	'anon',
-//	'rnd', 'page',
+//	'rnd',
 	'tags'
 ];
 
@@ -970,8 +970,14 @@ App.main = function(callback, createUi)
 
 		// Replaces light-dark color functions with light colors for older browsers
 		Editor.loadCompatibleCss();
-		
+
 		App.isMainCalled = true;
+
+		// Declares the language of the user interface for screen readers, which
+		// is the default language if there are no resources for mxLanguage
+		document.documentElement.setAttribute('lang', (mxLanguage != null &&
+			mxResources.isLanguageSupported(mxLanguage)) ? mxLanguage :
+			mxClient.defaultLanguage);
 
 		// Detects Android tablets using Chrome's "Request Desktop Site"
 		// mode where the user agent shows Linux instead of Android.
@@ -2307,6 +2313,8 @@ App.prototype.init = function()
 				{
 					this.appIconClicked(evt);
 				}));
+
+				this.initKeyboardButton(this.icon);
 			}
 			
 			this.menubar.container.insertBefore(this.icon, this.menubar.container.firstChild);
@@ -4092,6 +4100,7 @@ App.prototype.showAlert = function(message)
 	{
 		var div = document.createElement('div');
 		div.className = 'geAlert';
+		div.setAttribute('role', 'alert');
 		div.style.zIndex = 2e9; 
 		div.style.left = '50%';
 		div.style.top = '-100%';
@@ -4111,6 +4120,7 @@ App.prototype.showAlert = function(message)
 		close.style.display = 'block';
 		close.setAttribute('title', mxResources.get('close'));
 		close.innerHTML = mxResources.get('close');
+		Editor.initKeyboardButton(close);
 		div.appendChild(close);
 		
 		mxEvent.addListener(close, 'click', function(evt)
@@ -4728,9 +4738,18 @@ App.prototype.executeCreateObject = function(value, done)
 						// without re-running them.
 						value.type = 'xml';
 						value.compressed = true;
-						value.data = Graph.compress((value.layout != null ||
-							value.applyLayouts) ?
-							mxUtils.getXml(this.editor.getGraphXml()) : xml);
+						var data = xml;
+
+						if (value.layout != null || value.applyLayouts)
+						{
+							// Keeps the Alt Text of the page (see createMermaidPageXml)
+							data = mxUtils.getXml((this.currentPage != null &&
+								this.currentPage.getAlt() != null) ?
+								this.getXmlFileData(null, null, true) :
+								this.editor.getGraphXml());
+						}
+
+						value.data = Graph.compress(data);
 						delete value.layout;
 						delete value.applyLayouts;
 						var hash = 'create=' + encodeURIComponent(JSON.stringify(value));
@@ -4869,18 +4888,20 @@ App.prototype.executeCreateObject = function(value, done)
 					// (carrying the mermaid source for re-editing), matching the
 					// legacy image insert. New images follow the configured Mermaid
 					// config, or keep the legacy look when unset (parseMermaidImage).
+					// The diagram is the page, so its text alternative becomes
+					// the Alt Text of the page (see createMermaidPageXml)
 					this.parseMermaidImage(data, mxUtils.bind(this, function(xml)
 					{
-						createDiagram(xml);
+						createDiagram(this.createMermaidPageXml(xml));
 					}), onMermaidError, version);
 				}
 				else
 				{
 					this.parseMermaidDiagram(data, null, mxUtils.bind(this, function(xml)
 					{
-						createDiagram(mxMermaidToDrawio.wrapGroup(xml, data,
-							EditorUi.getInsertMermaidConfig(),
-							(version != null) ? {version: version} : null));
+						createDiagram(this.createMermaidPageXml(mxMermaidToDrawio.wrapGroup(
+							xml, data, EditorUi.getInsertMermaidConfig(),
+							(version != null) ? {version: version} : null)));
 					}), onMermaidError, null, version);
 				}
 			}
@@ -5284,6 +5305,20 @@ App.prototype.showHome = function()
 	}), null, null, null, true);
 
 	dlg.init();
+};
+
+/**
+ * Returns true if a Google Drive file that returned 404 asks for access
+ * (showDriveAccessDialog) instead of showing an error: where the Home screen
+ * can show, and in the lightbox and viewer of published links, which only
+ * open Drive files each user opened with draw.io before. Not in a frame,
+ * where the Picker would need the origin of the top page.
+ */
+App.prototype.isDriveAccessAvailable = function()
+{
+	return this.isHomeAvailable() || (this.drive != null &&
+		this.editor.isChromelessView() && urlParams['embed'] != '1' &&
+		window.self === window.top);
 };
 
 /**
@@ -8908,6 +8943,9 @@ App.prototype.updateHeader = function()
 			this.appIconClicked(evt);
 		}));
 
+		this.initKeyboardButton(this.appIcon);
+		this.appIcon.setAttribute('aria-label', mxResources.get('draw.io'));
+
 		mxEvent.addListener(this.appIcon, 'mouseover', mxUtils.bind(this, function()
 		{
 			var file = this.getCurrentFile();
@@ -8995,7 +9033,7 @@ App.prototype.updateHeader = function()
 			mxEvent.consume(evt);
 		}));
 
-		mxEvent.preventDefault(this.fullscreenElement);
+		this.initKeyboardButton(this.fullscreenElement);
 
 		this.addListener('formatWidthChanged', mxUtils.bind(this, function()
 		{
@@ -9018,7 +9056,7 @@ App.prototype.updateHeader = function()
 			mxEvent.consume(evt);
 		}));
 
-		mxEvent.preventDefault(toggleFormatElement);
+		this.initKeyboardButton(toggleFormatElement);
 
 		var toggleFormatPanel = mxUtils.bind(this, function()
 		{
@@ -9052,7 +9090,7 @@ App.prototype.updateHeader = function()
 				mxEvent.consume(evt);
 			}));
 
-			mxEvent.preventDefault(toggleElement);
+			this.initKeyboardButton(toggleElement);
 			
 			// Enable compact mode for small screens except for Firefox where the height is wrong
 			if (!mxClient.IS_FF && screen.height <= 740 && typeof toggleElement.click !== 'undefined')
